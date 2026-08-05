@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "misVentas",
-    "slug": "misVentas",
+    "name": "Cejas & Café",
+    "slug": "cejas-y-cafe",
+    "scheme": "cejasycafe",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,6 +11,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.cejas.cafe",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +22,17 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-font",
+      "expo-router"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8ff2124f-99b3-4eed-b138-e5d8d44b4242"
+      }
     }
   }
 }

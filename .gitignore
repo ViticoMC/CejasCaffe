@@ -42,3 +42,6 @@ yarn-error.*
 
 #Agents skills
 .agents
+
+#MCPs
+.playwright-mcp
