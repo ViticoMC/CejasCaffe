@@ -5,7 +5,7 @@ import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { fuentes } from '../theme/typography';
-import { IconoCejas } from './IconoCejas';
+import { IconoLogo } from './IconoLogo';
 
 export type DestinoNav = 'bebidas' | 'ingredientes' | 'cejas' | 'ventas' | 'inversiones';
 
@@ -15,6 +15,7 @@ export interface ItemNav {
   etiqueta: string;
   icono: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   svg?: (color: string, size: number) => React.ReactNode;
+  logo?: boolean;
 }
 
 export const DESTINOS_NAV: ItemNav[] = [
@@ -25,7 +26,7 @@ export const DESTINOS_NAV: ItemNav[] = [
     ruta: '/cejas',
     etiqueta: 'Cejas',
     icono: 'mirror',
-    svg: (color, size) => <IconoCejas size={size} color={color} />,
+    logo: true,
   },
   { clave: 'ventas', ruta: '/ventas', etiqueta: 'Ventas', icono: 'cash-multiple' },
   { clave: 'inversiones', ruta: '/inversiones', etiqueta: 'Inversiones', icono: 'chart-donut' },
@@ -125,7 +126,9 @@ export function NavBar() {
                 ]}
               >
                 <View style={[estilos.icono, estaActivo && estilos.iconoActivo]}>
-                  {item.svg != null ? (
+                  {item.logo ? (
+                    <IconoLogo size={22} opacity={estaActivo ? 1 : 0.55} />
+                  ) : item.svg != null ? (
                     item.svg(
                       estaActivo ? colores.brand.primary : colores.texto.muted,
                       22

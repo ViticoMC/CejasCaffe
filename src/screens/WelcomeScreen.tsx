@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colores, espaciado, radio } from '../theme/tokens';
 import { tipografia } from '../theme/typography';
@@ -33,7 +33,11 @@ export function WelcomeScreen() {
           </View>
 
           <View style={estilos.logo}>
-            <Feather name="coffee" size={26} color={colores.brand.accent} />
+            <Image
+              source={require('../../assets/logo.png')}
+              style={estilos.logoImagen}
+              resizeMode="contain"
+            />
           </View>
 
           <Text style={tipografia.display}>Cejas & Café</Text>
@@ -100,6 +104,10 @@ const estilos = StyleSheet.create({
   },
   logo: {
     marginBottom: espaciado.md,
+  },
+  logoImagen: {
+    width: 120,
+    height: 110,
   },
   tagline: {
     marginTop: espaciado.sm,
