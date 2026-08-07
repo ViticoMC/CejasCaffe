@@ -15,6 +15,8 @@ import { listarBebidas, obtenerReceta } from '../db/repos/bebidas';
 import { eliminarVenta, listarVentas, registrarVenta } from '../db/repos/ventas';
 import { calcularResumenBebida, type ResumenBebida } from '../domain/calculos';
 import {
+  fechaAVentaISO,
+  fechaDePeriodo,
   formatearFechaHora,
   rangoDePeriodo,
   tituloDePeriodo,
@@ -27,6 +29,7 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ChipSelector, type OpcionChip } from '../ui/ChipSelector';
 import { EmptyState } from '../ui/EmptyState';
+import { FechaSelector } from '../ui/FechaSelector';
 import { Modal } from '../ui/Modal';
 import { Stepper } from '../ui/Stepper';
 
@@ -51,8 +54,12 @@ export function VentasScreen() {
   const [modalRegistro, setModalRegistro] = useState(false);
   const [bebidaElegida, setBebidaElegida] = useState<BebidaConResumen | null>(null);
   const [cantidadVenta, setCantidadVenta] = useState(1);
+  const [fechaVenta, setFechaVenta] = useState<Date>(() => new Date());
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<Venta | null>(null);
+  const [modalCalendario, setModalCalendario] = useState(false);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState<Date>(() => new Date());
+  const [calendarioId, setCalendarioId] = useState(0);
 
   const filtro = useMemo(() => {
     const rango = rangoDePeriodo(periodo, offset);
@@ -104,6 +111,7 @@ export function VentasScreen() {
   const abrirRegistro = () => {
     setBebidaElegida(null);
     setCantidadVenta(1);
+    setFechaVenta(new Date());
     setModalRegistro(true);
   };
 
@@ -114,6 +122,7 @@ export function VentasScreen() {
       await registrarVenta(db, {
         bebida_id: bebidaElegida.id,
         cantidad: cantidadVenta,
+        fecha: fechaAVentaISO(fechaVenta),
       });
       setModalRegistro(false);
       setBebidaElegida(null);
@@ -128,6 +137,21 @@ export function VentasScreen() {
     await eliminarVenta(db, eliminando.id);
     setEliminando(null);
     await recargar();
+  };
+
+  const abrirCalendario = () => {
+    setFechaSeleccionada(fechaDePeriodo(periodo, offset));
+    setCalendarioId((c) => c + 1);
+    setModalCalendario(true);
+  };
+
+  const aplicarDia = (fecha: Date) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const dia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    setOffset(Math.round((dia.getTime() - hoy.getTime()) / 86400000));
+    setPeriodo('hoy');
+    setModalCalendario(false);
   };
 
   const opcionesBebidas: OpcionChip<number>[] = useMemo(
@@ -260,6 +284,17 @@ export function VentasScreen() {
               <Feather name="chevron-right" size={20} color={colores.brand.primary} />
             </Pressable>
           )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Elegir un día específico"
+            onPress={abrirCalendario}
+            style={({ pressed }) => [
+              estilos.botonCalendario,
+              pressed && estilos.presionado,
+            ]}
+          >
+            <Feather name="calendar" size={18} color={colores.brand.accent} />
+          </Pressable>
         </View>
         <ChipSelector
           opciones={opcionesBebidas}
@@ -395,6 +430,7 @@ export function VentasScreen() {
                 minimo={1}
               />
             </View>
+            <FechaSelector valor={fechaVenta} onChange={setFechaVenta} />
             <Pressable
               accessibilityRole="button"
               onPress={() => setBebidaElegida(null)}
@@ -407,6 +443,31 @@ export function VentasScreen() {
             </Pressable>
           </>
         )}
+      </Modal>
+
+      <Modal
+        visible={modalCalendario}
+        titulo="Ver un día específico"
+        subtitulo="Selecciona la fecha que quieres consultar"
+        onClose={() => setModalCalendario(false)}
+        footer={
+          <>
+            <Button
+              label="Cancelar"
+              variant="secondary"
+              onPress={() => setModalCalendario(false)}
+              style={estilos.botonMitad}
+            />
+            <Button
+              label="Ver día"
+              icon="calendar"
+              onPress={() => aplicarDia(fechaSeleccionada)}
+              style={estilos.botonMitad}
+            />
+          </>
+        }
+      >
+        <FechaSelector key={calendarioId} valor={fechaSeleccionada} onChange={setFechaSeleccionada} />
       </Modal>
 
       <Modal
@@ -505,6 +566,16 @@ const estilos = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radio.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botonCalendario: {
+    width: 40,
+    height: 40,
+    borderRadius: radio.md,
+    borderWidth: 1,
+    borderColor: colores.borde.default,
+    backgroundColor: colores.bg.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },

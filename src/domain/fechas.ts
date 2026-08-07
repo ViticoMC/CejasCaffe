@@ -58,6 +58,20 @@ const MESES = [
   'dic',
 ];
 
+export function fechaDePeriodo(tipo: TipoPeriodo, offset = 0): Date {
+  const hoy = new Date();
+  switch (tipo) {
+    case 'hoy':
+      return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + offset);
+    case 'semana':
+      return inicioSemanaLocal(offset);
+    case 'mes':
+      return new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1);
+    case 'todo':
+      return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  }
+}
+
 export function tituloDePeriodo(tipo: TipoPeriodo, offset = 0): string {
   const hoy = new Date();
   switch (tipo) {
@@ -80,6 +94,12 @@ export function tituloDePeriodo(tipo: TipoPeriodo, offset = 0): string {
     case 'todo':
       return 'Todo el histórico';
   }
+}
+
+export function fechaAVentaISO(fecha: Date): string {
+  return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(
+    fecha.getDate()
+  )}T${'00:00:00'}`;
 }
 
 export function formatearFechaHora(iso: string): string {

@@ -65,6 +65,7 @@ export interface Venta {
 export interface NuevaVenta {
   bebida_id: number;
   cantidad: number;
+  fecha?: string;
 }
 
 export interface FiltroVentas {

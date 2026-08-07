@@ -14,14 +14,19 @@ export async function registrarVenta(
   const receta = await obtenerReceta(db, dato.bebida_id);
   const resumen = calcularResumenBebida(receta, bebida.porcentaje_ganancia);
 
+  const columnas = dato.fecha
+    ? '(bebida_id, nombre_bebida, cantidad, precio_unitario, costo_unitario, creado_en)'
+    : '(bebida_id, nombre_bebida, cantidad, precio_unitario, costo_unitario)';
+
   const resultado = await db.runAsync(
-    `INSERT INTO ventas (bebida_id, nombre_bebida, cantidad, precio_unitario, costo_unitario)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO ventas ${columnas}
+     VALUES (?, ?, ?, ?, ?${dato.fecha ? ', ?' : ''})`,
     bebida.id,
     bebida.nombre.trim(),
     dato.cantidad,
     resumen.precioVenta,
-    resumen.costoProduccion
+    resumen.costoProduccion,
+    ...(dato.fecha ? [dato.fecha] : [])
   );
   const venta = await db.getFirstAsync<Venta>(
     'SELECT * FROM ventas WHERE id = ?',
