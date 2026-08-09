@@ -46,17 +46,24 @@ export async function actualizarIngrediente(
 export async function contarUsoIngrediente(
   db: SQLiteDatabase,
   id: number
-): Promise<number> {
-  const usado = await db.getFirstAsync<{ total: number }>(
+): Promise<{ bebidas: number; servicios: number }> {
+  const enBebidas = await db.getFirstAsync<{ total: number }>(
     'SELECT COUNT(*) AS total FROM bebida_ingredientes WHERE ingrediente_id = ?',
     id
   );
-  return usado?.total ?? 0;
+  const enServicios = await db.getFirstAsync<{ total: number }>(
+    'SELECT COUNT(*) AS total FROM servicio_materiales WHERE ingrediente_id = ?',
+    id
+  );
+  return {
+    bebidas: enBebidas?.total ?? 0,
+    servicios: enServicios?.total ?? 0,
+  };
 }
 
 export async function eliminarIngrediente(db: SQLiteDatabase, id: number): Promise<void> {
   const enUso = await contarUsoIngrediente(db, id);
-  if (enUso > 0) {
+  if (enUso.bebidas > 0 || enUso.servicios > 0) {
     throw new Error('INGREDIENTE_EN_USO');
   }
   await db.runAsync('DELETE FROM ingredientes WHERE id = ?', id);

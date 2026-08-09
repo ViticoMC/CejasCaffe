@@ -52,10 +52,52 @@ export interface NuevaBebida {
   receta: RecetaDato[];
 }
 
+export interface Servicio {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  porcentaje_ganancia: number;
+  activo: boolean;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface ServicioMaterial {
+  id: number;
+  servicio_id: number;
+  ingrediente_id: number;
+  cantidad: number;
+}
+
+export interface ItemServicioMaterial {
+  id: number;
+  servicio_id: number;
+  ingrediente_id: number;
+  nombre_ingrediente: string;
+  unidad: string;
+  cantidad: number;
+  precio_unitario: number;
+}
+
+export interface NuevoServicio {
+  nombre: string;
+  descripcion?: string | null;
+  porcentaje_ganancia: number;
+  receta: RecetaDato[];
+}
+
+export type TipoProducto = 'bebida' | 'servicio';
+
+export interface ProductoVenta {
+  tipo: TipoProducto;
+  id: number;
+}
+
 export interface Venta {
   id: number;
   bebida_id: number | null;
-  nombre_bebida: string;
+  servicio_id: number | null;
+  nombre_producto: string;
   cantidad: number;
   precio_unitario: number;
   costo_unitario: number;
@@ -63,7 +105,7 @@ export interface Venta {
 }
 
 export interface NuevaVenta {
-  bebida_id: number;
+  producto: ProductoVenta;
   cantidad: number;
   fecha?: string;
 }
@@ -72,6 +114,8 @@ export interface FiltroVentas {
   desde?: string;
   hasta?: string;
   bebida_id?: number;
+  servicio_id?: number;
+  tipo?: TipoProducto;
 }
 
 export interface ResumenVentas {

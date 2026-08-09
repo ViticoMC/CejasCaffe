@@ -5,9 +5,15 @@ import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { fuentes } from '../theme/typography';
-import { IconoLogo } from './IconoLogo';
+import { IconoCeja } from './IconoCeja';
 
-export type DestinoNav = 'bebidas' | 'ingredientes' | 'cejas' | 'ventas' | 'inversiones';
+export type DestinoNav =
+  | 'bebidas'
+  | 'ingredientes'
+  | 'cejas'
+  | 'ventas'
+  | 'inversiones'
+  | 'respaldos';
 
 export interface ItemNav {
   clave: DestinoNav;
@@ -15,21 +21,21 @@ export interface ItemNav {
   etiqueta: string;
   icono: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   svg?: (color: string, size: number) => React.ReactNode;
-  logo?: boolean;
 }
 
 export const DESTINOS_NAV: ItemNav[] = [
   { clave: 'bebidas', ruta: '/bebidas', etiqueta: 'Bebidas', icono: 'coffee-outline' },
-  { clave: 'ingredientes', ruta: '/ingredientes', etiqueta: 'Ingredientes', icono: 'sprout' },
+  { clave: 'ingredientes', ruta: '/ingredientes', etiqueta: 'Materiales', icono: 'sprout' },
   {
     clave: 'cejas',
     ruta: '/cejas',
     etiqueta: 'Cejas',
     icono: 'mirror',
-    logo: true,
+    svg: (color) => <IconoCeja color={color} />,
   },
   { clave: 'ventas', ruta: '/ventas', etiqueta: 'Ventas', icono: 'cash-multiple' },
   { clave: 'inversiones', ruta: '/inversiones', etiqueta: 'Inversiones', icono: 'chart-donut' },
+  { clave: 'respaldos', ruta: '/respaldos', etiqueta: 'Respaldos', icono: 'backup-restore' },
 ];
 
 const ALTO_SHEET = 176;
@@ -126,9 +132,7 @@ export function NavBar() {
                 ]}
               >
                 <View style={[estilos.icono, estaActivo && estilos.iconoActivo]}>
-                  {item.logo ? (
-                    <IconoLogo size={22} opacity={estaActivo ? 1 : 0.55} />
-                  ) : item.svg != null ? (
+                  {item.svg != null ? (
                     item.svg(
                       estaActivo ? colores.brand.primary : colores.texto.muted,
                       22
@@ -166,7 +170,7 @@ const estilos = StyleSheet.create({
     backgroundColor: colores.bg.surface,
     borderTopLeftRadius: radio.xl,
     borderTopRightRadius: radio.xl,
-    paddingHorizontal: espaciado.md,
+    paddingHorizontal: espaciado.sm,
     paddingTop: espaciado.xs,
     ...sombra.md,
   },

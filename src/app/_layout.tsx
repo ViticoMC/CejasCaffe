@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ProveedorRecarga, useRecarga } from '../context/recarga';
 import { DATABASE_NAME, migrateDbIfNeeded } from '../db/database';
 import { colores } from '../theme/tokens';
 import { NavBar } from '../ui/NavBar';
@@ -27,7 +28,16 @@ export default function Layout() {
   }
 
   return (
-    <SafeAreaProvider>
+    <ProveedorRecarga>
+      <CuerpoApp />
+    </ProveedorRecarga>
+  );
+}
+
+function CuerpoApp() {
+  const { clave } = useRecarga();
+  return (
+    <SafeAreaProvider key={clave}>
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
         <StatusBar style="dark" />
         <View style={estilos.shell}>

@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { listarBebidas, obtenerReceta } from '../db/repos/bebidas';
+import { listarServicios, obtenerRecetaServicio } from '../db/repos/servicios';
 import { eliminarVenta, listarVentas, registrarVenta } from '../db/repos/ventas';
-import { calcularResumenBebida, type ResumenBebida } from '../domain/calculos';
+import { calcularResumenReceta, type ResumenReceta } from '../domain/calculos';
 import {
   fechaAVentaISO,
   fechaDePeriodo,
@@ -22,9 +23,10 @@ import {
   tituloDePeriodo,
   type TipoPeriodo,
 } from '../domain/fechas';
-import type { Bebida, Venta } from '../domain/tipos';
+import type { Bebida, Servicio, TipoProducto, Venta } from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { formatearDinero, tipografia } from '../theme/typography';
+import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ChipSelector, type OpcionChip } from '../ui/ChipSelector';
@@ -33,7 +35,18 @@ import { FechaSelector } from '../ui/FechaSelector';
 import { Modal } from '../ui/Modal';
 import { Stepper } from '../ui/Stepper';
 
-type BebidaConResumen = Bebida & { resumen: ResumenBebida };
+type BebidaConResumen = Bebida & { resumen: ResumenReceta };
+type ServicioConResumen = Servicio & { resumen: ResumenReceta };
+
+interface ProductoConResumen {
+  id: number;
+  nombre: string;
+  tipo: TipoProducto;
+  activo: boolean;
+  resumen: ResumenReceta;
+}
+
+type FiltroTipo = 'todas' | TipoProducto;
 
 const OPCIONES_PERIODO: OpcionChip<TipoPeriodo>[] = [
   { valor: 'hoy', etiqueta: 'Hoy' },
@@ -42,17 +55,30 @@ const OPCIONES_PERIODO: OpcionChip<TipoPeriodo>[] = [
   { valor: 'todo', etiqueta: 'Todo' },
 ];
 
+const OPCIONES_TIPO: OpcionChip<FiltroTipo>[] = [
+  { valor: 'todas', etiqueta: 'Todas' },
+  { valor: 'bebida', etiqueta: 'Bebidas' },
+  { valor: 'servicio', etiqueta: 'Servicios' },
+];
+
+const ETIQUETA_TIPO: Record<TipoProducto, string> = {
+  bebida: 'Bebida',
+  servicio: 'Servicio',
+};
+
 export function VentasScreen() {
   const db = useSQLiteContext();
   const { height } = useWindowDimensions();
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [bebidas, setBebidas] = useState<BebidaConResumen[]>([]);
+  const [servicios, setServicios] = useState<ServicioConResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [periodo, setPeriodo] = useState<TipoPeriodo>('hoy');
   const [offset, setOffset] = useState(0);
-  const [bebidaFiltro, setBebidaFiltro] = useState(0);
+  const [tipoFiltro, setTipoFiltro] = useState<FiltroTipo>('todas');
+  const [productoFiltro, setProductoFiltro] = useState(0);
   const [modalRegistro, setModalRegistro] = useState(false);
-  const [bebidaElegida, setBebidaElegida] = useState<BebidaConResumen | null>(null);
+  const [productoElegido, setProductoElegido] = useState<ProductoConResumen | null>(null);
   const [cantidadVenta, setCantidadVenta] = useState(1);
   const [fechaVenta, setFechaVenta] = useState<Date>(() => new Date());
   const [guardando, setGuardando] = useState(false);
@@ -61,32 +87,67 @@ export function VentasScreen() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState<Date>(() => new Date());
   const [calendarioId, setCalendarioId] = useState(0);
 
+  const productos: ProductoConResumen[] = useMemo(
+    () => [
+      ...bebidas.map((b) => ({
+        id: b.id,
+        nombre: b.nombre,
+        tipo: 'bebida' as const,
+        activo: b.activo,
+        resumen: b.resumen,
+      })),
+      ...servicios.map((s) => ({
+        id: s.id,
+        nombre: s.nombre,
+        tipo: 'servicio' as const,
+        activo: s.activo,
+        resumen: s.resumen,
+      })),
+    ],
+    [bebidas, servicios]
+  );
+
   const filtro = useMemo(() => {
     const rango = rangoDePeriodo(periodo, offset);
     return {
       desde: rango.desde,
       hasta: rango.hasta,
-      bebida_id: bebidaFiltro !== 0 ? bebidaFiltro : undefined,
+      tipo: tipoFiltro === 'todas' ? undefined : tipoFiltro,
+      bebida_id:
+        tipoFiltro === 'bebida' && productoFiltro !== 0 ? productoFiltro : undefined,
+      servicio_id:
+        tipoFiltro === 'servicio' && productoFiltro !== 0 ? productoFiltro : undefined,
     };
-  }, [periodo, offset, bebidaFiltro]);
+  }, [periodo, offset, tipoFiltro, productoFiltro]);
 
   const recargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [bebidasLista, ventasLista] = await Promise.all([
+      const [bebidasLista, serviciosLista, ventasLista] = await Promise.all([
         listarBebidas(db),
+        listarServicios(db),
         listarVentas(db, filtro),
       ]);
-      const conResumen = await Promise.all(
+      const conResumenBebidas = await Promise.all(
         bebidasLista.map(async (bebida) => {
           const receta = await obtenerReceta(db, bebida.id);
           return {
             ...bebida,
-            resumen: calcularResumenBebida(receta, bebida.porcentaje_ganancia),
+            resumen: calcularResumenReceta(receta, bebida.porcentaje_ganancia),
           };
         })
       );
-      setBebidas(conResumen);
+      const conResumenServicios = await Promise.all(
+        serviciosLista.map(async (servicio) => {
+          const receta = await obtenerRecetaServicio(db, servicio.id);
+          return {
+            ...servicio,
+            resumen: calcularResumenReceta(receta, servicio.porcentaje_ganancia),
+          };
+        })
+      );
+      setBebidas(conResumenBebidas);
+      setServicios(conResumenServicios);
       setVentas(ventasLista);
     } finally {
       setCargando(false);
@@ -109,23 +170,23 @@ export function VentasScreen() {
   }, [ventas]);
 
   const abrirRegistro = () => {
-    setBebidaElegida(null);
+    setProductoElegido(null);
     setCantidadVenta(1);
     setFechaVenta(new Date());
     setModalRegistro(true);
   };
 
   const registrar = async () => {
-    if (bebidaElegida == null) return;
+    if (productoElegido == null) return;
     setGuardando(true);
     try {
       await registrarVenta(db, {
-        bebida_id: bebidaElegida.id,
+        producto: { tipo: productoElegido.tipo, id: productoElegido.id },
         cantidad: cantidadVenta,
         fecha: fechaAVentaISO(fechaVenta),
       });
       setModalRegistro(false);
-      setBebidaElegida(null);
+      setProductoElegido(null);
       await recargar();
     } finally {
       setGuardando(false);
@@ -154,24 +215,40 @@ export function VentasScreen() {
     setModalCalendario(false);
   };
 
-  const opcionesBebidas: OpcionChip<number>[] = useMemo(
+  const productosFiltrados = useMemo(
+    () => productos.filter((p) => tipoFiltro === 'todas' || p.tipo === tipoFiltro),
+    [productos, tipoFiltro]
+  );
+
+  const opcionesProductos: OpcionChip<number>[] = useMemo(
     () => [
       { valor: 0, etiqueta: 'Todas' },
-      ...bebidas.map((b) => ({ valor: b.id, etiqueta: b.nombre })),
+      ...productosFiltrados.map((p) => ({ valor: p.id, etiqueta: p.nombre })),
     ],
-    [bebidas]
+    [productosFiltrados]
   );
+
+  const cambiarTipo = (tipo: FiltroTipo) => {
+    setTipoFiltro(tipo);
+    setProductoFiltro(0);
+  };
 
   const renderItem = ({ item }: { item: Venta }) => (
     <Card style={estilos.card}>
       <View style={estilos.filaVenta}>
         <View style={estilos.infoVenta}>
           <Text style={[tipografia.small, estilos.nombreVenta]} numberOfLines={1}>
-            {item.nombre_bebida}
+            {item.nombre_producto}
           </Text>
-          <Text style={tipografia.micro}>
-            {item.cantidad} × {formatearDinero(item.precio_unitario)}
-          </Text>
+          <View style={estilos.filaTipoVenta}>
+            <Badge
+              label={ETIQUETA_TIPO[item.servicio_id != null ? 'servicio' : 'bebida']}
+              tone="info"
+            />
+            <Text style={tipografia.micro}>
+              {item.cantidad} × {formatearDinero(item.precio_unitario)}
+            </Text>
+          </View>
           <Text style={tipografia.micro}>{formatearFechaHora(item.creado_en)}</Text>
         </View>
         <View style={estilos.derechaVenta}>
@@ -180,7 +257,7 @@ export function VentasScreen() {
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Eliminar venta de ${item.nombre_bebida}`}
+            accessibilityLabel={`Eliminar venta de ${item.nombre_producto}`}
             onPress={() => setEliminando(item)}
             style={estilos.botonEliminar}
           >
@@ -297,10 +374,17 @@ export function VentasScreen() {
           </Pressable>
         </View>
         <ChipSelector
-          opciones={opcionesBebidas}
-          seleccionado={bebidaFiltro}
-          onSeleccionar={setBebidaFiltro}
+          opciones={OPCIONES_TIPO}
+          seleccionado={tipoFiltro}
+          onSeleccionar={cambiarTipo}
         />
+        {productosFiltrados.length > 0 && (
+          <ChipSelector
+            opciones={opcionesProductos}
+            seleccionado={productoFiltro}
+            onSeleccionar={setProductoFiltro}
+          />
+        )}
       </View>
 
       {cargando ? (
@@ -319,12 +403,12 @@ export function VentasScreen() {
             <EmptyState
               titulo="Sin ventas aquí"
               texto={
-                bebidas.length === 0
-                  ? 'Crea bebidas con sus recetas para poder registrar ventas.'
+                productos.length === 0
+                  ? 'Crea bebidas o servicios con sus recetas para poder registrar ventas.'
                   : 'No hay ventas en el periodo o producto seleccionado.'
               }
               accion={
-                bebidas.length === 0
+                productos.length === 0
                   ? undefined
                   : { label: 'Registrar venta', onPress: abrirRegistro }
               }
@@ -337,21 +421,21 @@ export function VentasScreen() {
         visible={modalRegistro}
         titulo="Registrar venta"
         subtitulo={
-          bebidaElegida != null ? bebidaElegida.nombre : 'Elige una bebida para empezar'
+          productoElegido != null ? productoElegido.nombre : 'Elige un producto para empezar'
         }
         onClose={() => {
           setModalRegistro(false);
-          setBebidaElegida(null);
+          setProductoElegido(null);
         }}
         footer={
-          bebidaElegida != null ? (
+          productoElegido != null ? (
             <>
               <Button
                 label="Cancelar"
                 variant="secondary"
                 onPress={() => {
                   setModalRegistro(false);
-                  setBebidaElegida(null);
+                  setProductoElegido(null);
                 }}
                 disabled={guardando}
                 style={estilos.botonMitad}
@@ -367,15 +451,16 @@ export function VentasScreen() {
           ) : undefined
         }
       >
-        {bebidaElegida == null ? (
-          bebidas.length === 0 ? (
-            <Text style={[tipografia.small, estilos.sinBebidas]}>
-              No hay bebidas creadas. Ve a la pestaña Bebidas para crear una.
+        {productoElegido == null ? (
+          productos.length === 0 ? (
+            <Text style={[tipografia.small, estilos.sinProductos]}>
+              No hay bebidas ni servicios creados. Ve a las pestañas Bebidas o Servicios para
+              crear uno.
             </Text>
           ) : (
             <FlatList
-              data={bebidas}
-              keyExtractor={(item) => String(item.id)}
+              data={productos}
+              keyExtractor={(item) => `${item.tipo}-${item.id}`}
               style={{ maxHeight: height * 0.45 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -384,21 +469,24 @@ export function VentasScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Vender ${item.nombre}`}
                   onPress={() => {
-                    setBebidaElegida(item);
+                    setProductoElegido(item);
                     setCantidadVenta(1);
                   }}
                   style={({ pressed }) => [
-                    estilos.filaBebida,
+                    estilos.filaProducto,
                     pressed && estilos.presionado,
                   ]}
                 >
-                  <View style={estilos.infoBebida}>
+                  <View style={estilos.infoProducto}>
                     <Text style={tipografia.small} numberOfLines={1}>
                       {item.nombre}
                     </Text>
-                    {!item.activo && <Text style={tipografia.micro}>Inactiva</Text>}
+                    <View style={estilos.filaTipoProducto}>
+                      <Badge label={ETIQUETA_TIPO[item.tipo]} tone="info" />
+                      {!item.activo && <Text style={tipografia.micro}>Inactivo</Text>}
+                    </View>
                   </View>
-                  <Text style={[tipografia.small, estilos.precioBebida]}>
+                  <Text style={[tipografia.small, estilos.precioProducto]}>
                     {formatearDinero(item.resumen.precioVenta)}
                   </Text>
                 </Pressable>
@@ -409,20 +497,20 @@ export function VentasScreen() {
           <>
             <Card style={estilos.cardSeleccion}>
               <View style={estilos.infoSeleccion}>
-                <Text style={tipografia.small}>{bebidaElegida.nombre}</Text>
+                <Text style={tipografia.small}>{productoElegido.nombre}</Text>
                 <Text style={tipografia.micro}>
-                  {cantidadVenta} × {formatearDinero(bebidaElegida.resumen.precioVenta)} =
-                  {formatearDinero(cantidadVenta * bebidaElegida.resumen.precioVenta)}
+                  {cantidadVenta} × {formatearDinero(productoElegido.resumen.precioVenta)} =
+                  {formatearDinero(cantidadVenta * productoElegido.resumen.precioVenta)}
                 </Text>
               </View>
               <Text style={tipografia.precio}>
-                {formatearDinero(cantidadVenta * bebidaElegida.resumen.precioVenta)}
+                {formatearDinero(cantidadVenta * productoElegido.resumen.precioVenta)}
               </Text>
             </Card>
             <View style={estilos.filaCantidad}>
               <View style={estilos.infoCantidad}>
                 <Text style={tipografia.small}>Cantidad vendida</Text>
-                <Text style={tipografia.micro}>Unidades de esta bebida</Text>
+                <Text style={tipografia.micro}>Unidades de este producto</Text>
               </View>
               <Stepper
                 valor={cantidadVenta}
@@ -433,12 +521,12 @@ export function VentasScreen() {
             <FechaSelector valor={fechaVenta} onChange={setFechaVenta} />
             <Pressable
               accessibilityRole="button"
-              onPress={() => setBebidaElegida(null)}
-              style={estilos.cambiarBebida}
+              onPress={() => setProductoElegido(null)}
+              style={estilos.cambiarProducto}
             >
               <Feather name="repeat" size={16} color={colores.brand.accent} />
               <Text style={[tipografia.caption, estilos.textoCambiar]}>
-                Cambiar bebida
+                Cambiar producto
               </Text>
             </Pressable>
           </>
@@ -473,7 +561,7 @@ export function VentasScreen() {
       <Modal
         visible={eliminando != null}
         titulo="¿Eliminar venta?"
-        subtitulo={eliminando?.nombre_bebida}
+        subtitulo={eliminando?.nombre_producto}
         onClose={() => setEliminando(null)}
       >
         <Text style={tipografia.small}>
@@ -611,6 +699,11 @@ const estilos = StyleSheet.create({
   nombreVenta: {
     color: colores.texto.primary,
   },
+  filaTipoVenta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espaciado.sm,
+  },
   derechaVenta: {
     alignItems: 'flex-end',
     gap: espaciado.xs,
@@ -628,10 +721,10 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sinBebidas: {
+  sinProductos: {
     textAlign: 'center',
   },
-  filaBebida: {
+  filaProducto: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espaciado.md,
@@ -639,11 +732,16 @@ const estilos = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colores.borde.default,
   },
-  infoBebida: {
+  infoProducto: {
     flex: 1,
     gap: espaciado.xs,
   },
-  precioBebida: {
+  filaTipoProducto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espaciado.sm,
+  },
+  precioProducto: {
     fontFamily: 'Fraunces_600SemiBold',
     fontVariant: ['tabular-nums'],
     color: colores.brand.secondary,
@@ -669,7 +767,7 @@ const estilos = StyleSheet.create({
   infoCantidad: {
     gap: espaciado.xs,
   },
-  cambiarBebida: {
+  cambiarProducto: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: espaciado.sm,

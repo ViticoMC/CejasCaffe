@@ -21,7 +21,7 @@ import {
   obtenerReceta,
 } from '../db/repos/bebidas';
 import { listarIngredientes } from '../db/repos/ingredientes';
-import { calcularResumenBebida, type ResumenBebida } from '../domain/calculos';
+import { calcularResumenReceta, type ResumenReceta } from '../domain/calculos';
 import type { Bebida, Ingrediente, NuevaBebida } from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { formatearDinero, tipografia } from '../theme/typography';
@@ -34,7 +34,7 @@ import { Modal } from '../ui/Modal';
 import { PriceTag } from '../ui/PriceTag';
 import { Stepper } from '../ui/Stepper';
 
-type BebidaEnLista = Bebida & { resumen: ResumenBebida };
+type BebidaEnLista = Bebida & { resumen: ResumenReceta };
 
 interface LineaReceta {
   ingrediente_id: number;
@@ -158,7 +158,7 @@ function FormularioBebida({ visible, inicial, onGuardar, onCancelar }: Formulari
   const porcentajeNumero = parsearNumero(porcentaje);
   const resumen = useMemo(
     () =>
-      calcularResumenBebida(lineas, Number.isFinite(porcentajeNumero) ? porcentajeNumero : 0),
+      calcularResumenReceta(lineas, Number.isFinite(porcentajeNumero) ? porcentajeNumero : 0),
     [lineas, porcentajeNumero]
   );
 
@@ -392,7 +392,7 @@ export function BebidasScreen() {
           const receta = await obtenerReceta(db, bebida.id);
           return {
             ...bebida,
-            resumen: calcularResumenBebida(receta, bebida.porcentaje_ganancia),
+            resumen: calcularResumenReceta(receta, bebida.porcentaje_ganancia),
           };
         })
       );

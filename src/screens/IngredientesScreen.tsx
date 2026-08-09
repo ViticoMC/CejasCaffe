@@ -54,7 +54,7 @@ function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioPro
     const nombreLimpio = nombre.trim();
     const valorPrecio = parsearPrecio(precio);
     let ok = true;
-    setErrorNombre(nombreLimpio.length === 0 ? 'Escribe un nombre para el ingrediente.' : undefined);
+    setErrorNombre(nombreLimpio.length === 0 ? 'Escribe un nombre para el material.' : undefined);
     if (nombreLimpio.length === 0) ok = false;
     if (Number.isNaN(valorPrecio) || valorPrecio <= 0) {
       setErrorPrecio('El precio unitario debe ser mayor a 0.');
@@ -130,7 +130,7 @@ export function IngredientesScreen() {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
   const [editando, setEditando] = useState<Ingrediente | null>(null);
   const [eliminando, setEliminando] = useState<Ingrediente | null>(null);
-  const [usoEliminando, setUsoEliminando] = useState(0);
+  const [usoEliminando, setUsoEliminando] = useState({ bebidas: 0, servicios: 0 });
 
   const recargar = useCallback(async () => {
     setCargando(true);
@@ -217,16 +217,16 @@ export function IngredientesScreen() {
     <SafeAreaView style={estilos.safe}>
       <View style={estilos.encabezado}>
         <View style={estilos.titulos}>
-          <Text style={tipografia.title}>Ingredientes</Text>
+          <Text style={tipografia.title}>Materiales</Text>
           <Text style={tipografia.small}>
             {cargando
               ? 'Cargando…'
-              : `${ingredientes.length} ${ingredientes.length === 1 ? 'ingrediente' : 'ingredientes'} en el sistema`}
+              : `${ingredientes.length} ${ingredientes.length === 1 ? 'material' : 'materiales'} en el sistema`}
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Añadir ingrediente"
+          accessibilityLabel="Añadir material"
           onPress={abrirNuevo}
           style={estilos.botonNuevo}
         >
@@ -248,9 +248,9 @@ export function IngredientesScreen() {
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <EmptyState
-              titulo="Aún no hay ingredientes"
-              texto="El bambú crece con paciencia: añade tu primer ingrediente para empezar a construir las recetas."
-              accion={{ label: 'Añadir ingrediente', onPress: abrirNuevo }}
+              titulo="Aún no hay materiales"
+              texto="El bambú crece con paciencia: añade tu primer material para empezar a construir las recetas."
+              accion={{ label: 'Añadir material', onPress: abrirNuevo }}
             />
           }
         />
@@ -258,7 +258,7 @@ export function IngredientesScreen() {
 
       <Modal
         visible={formularioAbierto}
-        titulo={editando != null ? 'Editar ingrediente' : 'Nuevo ingrediente'}
+        titulo={editando != null ? 'Editar material' : 'Nuevo material'}
         subtitulo={
           editando != null
             ? 'Actualiza los datos y guarda los cambios.'
@@ -283,17 +283,28 @@ export function IngredientesScreen() {
       <Modal
         visible={eliminando != null}
         titulo={
-          usoEliminando > 0 ? 'Ingrediente en uso' : '¿Eliminar ingrediente?'
+          usoEliminando.bebidas > 0 || usoEliminando.servicios > 0
+            ? 'Material en uso'
+            : '¿Eliminar material?'
         }
         subtitulo={eliminando?.nombre}
         onClose={() => setEliminando(null)}
       >
-        {usoEliminando > 0 ? (
+        {usoEliminando.bebidas > 0 || usoEliminando.servicios > 0 ? (
           <>
             <Text style={tipografia.small}>
-              No se puede eliminar: este ingrediente está asociado a{' '}
-              {usoEliminando} {usoEliminando === 1 ? 'bebida' : 'bebidas'}. Quítalo de
-              sus recetas antes de poder borrarlo.
+              No se puede eliminar: este material está asociado a{' '}
+              {[
+                usoEliminando.bebidas > 0
+                  ? `${usoEliminando.bebidas} ${usoEliminando.bebidas === 1 ? 'bebida' : 'bebidas'}`
+                  : null,
+                usoEliminando.servicios > 0
+                  ? `${usoEliminando.servicios} ${usoEliminando.servicios === 1 ? 'servicio' : 'servicios'}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' y ')}
+              . Quítalo de sus recetas antes de poder borrarlo.
             </Text>
             <View style={estilos.footerModal}>
               <Button
@@ -306,7 +317,7 @@ export function IngredientesScreen() {
         ) : (
           <>
             <Text style={tipografia.small}>
-              Este ingrediente dejará de estar disponible para nuevas recetas. Esta acción no se
+              Este material dejará de estar disponible para nuevas recetas. Esta acción no se
               puede deshacer.
             </Text>
             <View style={estilos.footerModal}>

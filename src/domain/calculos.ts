@@ -22,16 +22,16 @@ export function calcularGananciaPorVenta(costoProduccion: number, precioVenta: n
   return redondearDinero(precioVenta - costoProduccion);
 }
 
-export interface ResumenBebida {
+export interface ResumenReceta {
   costoProduccion: number;
   precioVenta: number;
   gananciaPorVenta: number;
 }
 
-export function calcularResumenBebida(
+export function calcularResumenReceta(
   receta: CostoRecetaItem[],
   porcentajeGanancia: number
-): ResumenBebida {
+): ResumenReceta {
   const costoProduccion = calcularCostoProduccion(receta);
   const precioVenta = calcularPrecioVenta(costoProduccion, porcentajeGanancia);
   return {
