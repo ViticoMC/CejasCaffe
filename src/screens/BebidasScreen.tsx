@@ -27,12 +27,12 @@ import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { CantidadInput } from '../ui/CantidadInput';
 import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
 import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
 import { PriceTag } from '../ui/PriceTag';
-import { Stepper } from '../ui/Stepper';
 
 type BebidaEnLista = Bebida & { resumen: ResumenReceta };
 
@@ -205,6 +205,9 @@ function FormularioBebida({ visible, inicial, onGuardar, onCancelar }: Formulari
     if (lineas.length === 0) {
       setErrorReceta('Agrega al menos un ingrediente a la receta.');
       ok = false;
+    } else if (lineas.some((l) => !(l.cantidad > 0))) {
+      setErrorReceta('Cada ingrediente debe llevar una cantidad mayor a 0.');
+      ok = false;
     } else {
       setErrorReceta(undefined);
     }
@@ -343,8 +346,9 @@ function FormularioBebida({ visible, inicial, onGuardar, onCancelar }: Formulari
                 </View>
                 <View style={estilos.filaStepper}>
                   <Text style={tipografia.micro}>Cantidad</Text>
-                  <Stepper
+                  <CantidadInput
                     valor={linea.cantidad}
+                    unidad={linea.unidad}
                     onChange={(cantidad) => cambiarCantidad(linea.ingrediente_id, cantidad)}
                   />
                 </View>

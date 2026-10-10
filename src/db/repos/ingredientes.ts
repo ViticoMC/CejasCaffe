@@ -17,10 +17,11 @@ export async function crearIngrediente(
   dato: NuevoIngrediente
 ): Promise<Ingrediente> {
   const resultado = await db.runAsync(
-    'INSERT INTO ingredientes (nombre, unidad, precio_unitario) VALUES (?, ?, ?)',
+    'INSERT INTO ingredientes (nombre, unidad, precio_unitario, stock_minimo) VALUES (?, ?, ?, ?)',
     dato.nombre.trim(),
     dato.unidad.trim(),
-    dato.precio_unitario
+    dato.precio_unitario,
+    dato.stock_minimo ?? 0
   );
   const creado = await obtenerIngrediente(db, resultado.lastInsertRowId);
   if (!creado) {
@@ -35,10 +36,11 @@ export async function actualizarIngrediente(
   dato: NuevoIngrediente
 ): Promise<void> {
   await db.runAsync(
-    "UPDATE ingredientes SET nombre = ?, unidad = ?, precio_unitario = ?, actualizado_en = datetime('now') WHERE id = ?",
+    "UPDATE ingredientes SET nombre = ?, unidad = ?, precio_unitario = ?, stock_minimo = ?, actualizado_en = datetime('now') WHERE id = ?",
     dato.nombre.trim(),
     dato.unidad.trim(),
     dato.precio_unitario,
+    dato.stock_minimo ?? 0,
     id
   );
 }

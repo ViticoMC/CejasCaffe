@@ -5,7 +5,7 @@ import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { fuentes } from '../theme/typography';
-import { IconoCeja } from './IconoCeja';
+// import { IconoCeja } from './IconoCeja';
 
 export type DestinoNav =
   | 'bebidas'
@@ -13,6 +13,7 @@ export type DestinoNav =
   | 'cejas'
   | 'ventas'
   | 'inversiones'
+  | 'almacen'
   | 'respaldos';
 
 export interface ItemNav {
@@ -26,15 +27,18 @@ export interface ItemNav {
 export const DESTINOS_NAV: ItemNav[] = [
   { clave: 'bebidas', ruta: '/bebidas', etiqueta: 'Bebidas', icono: 'coffee-outline' },
   { clave: 'ingredientes', ruta: '/ingredientes', etiqueta: 'Materiales', icono: 'sprout' },
-  {
-    clave: 'cejas',
-    ruta: '/cejas',
-    etiqueta: 'Cejas',
-    icono: 'mirror',
-    svg: (color) => <IconoCeja color={color} />,
-  },
+  // Pestaña "Cejas" oculta temporalmente de la interfaz. La lógica (ruta y
+  // CejasScreen) se conserva; basta descomentar para volver a mostrarla.
+  // {
+  //   clave: 'cejas',
+  //   ruta: '/cejas',
+  //   etiqueta: 'Cejas',
+  //   icono: 'mirror',
+  //   svg: (color) => <IconoCeja color={color} />,
+  // },
   { clave: 'ventas', ruta: '/ventas', etiqueta: 'Ventas', icono: 'cash-multiple' },
   { clave: 'inversiones', ruta: '/inversiones', etiqueta: 'Inversiones', icono: 'chart-donut' },
+  { clave: 'almacen', ruta: '/almacen', etiqueta: 'Almacén', icono: 'warehouse' },
   { clave: 'respaldos', ruta: '/respaldos', etiqueta: 'Respaldos', icono: 'backup-restore' },
 ];
 
@@ -145,7 +149,12 @@ export function NavBar() {
                     />
                   )}
                 </View>
-                <Text style={[estilos.etiqueta, estaActivo && estilos.etiquetaActiva]}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  style={[estilos.etiqueta, estaActivo && estilos.etiquetaActiva]}
+                >
                   {item.etiqueta}
                 </Text>
               </Pressable>

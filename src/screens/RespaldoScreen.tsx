@@ -148,8 +148,9 @@ export function RespaldoScreen() {
       Alert.alert(
         'Datos restaurados',
         `Se restauraron ${resumen.ventas} ventas, ${resumen.bebidas} bebidas, ` +
-          `${resumen.servicios} servicios, ${resumen.ingredientes} ingredientes y ` +
-          `${resumen.inversiones} inversiones desde ${nombre}.`
+          `${resumen.servicios} servicios, ${resumen.ingredientes} materiales, ` +
+          `${resumen.inversiones} inversiones y ${resumen.movimientos_inventario} ` +
+          `movimientos de almacén desde ${nombre}.`
       );
     } catch (error) {
       Alert.alert('No se pudo restaurar', mensajeDeError(error));
@@ -320,10 +321,13 @@ export function RespaldoScreen() {
             <Text style={tipografia.small}>{filaResumen('Bebidas', pendiente.resumen.bebidas)}</Text>
             <Text style={tipografia.small}>{filaResumen('Servicios', pendiente.resumen.servicios)}</Text>
             <Text style={tipografia.small}>
-              {filaResumen('Ingredientes', pendiente.resumen.ingredientes)}
+              {filaResumen('Materiales', pendiente.resumen.ingredientes)}
             </Text>
             <Text style={tipografia.small}>
               {filaResumen('Inversiones', pendiente.resumen.inversiones)}
+            </Text>
+            <Text style={tipografia.small}>
+              {filaResumen('Movimientos de almacén', pendiente.resumen.movimientos_inventario)}
             </Text>
           </Card>
         )}

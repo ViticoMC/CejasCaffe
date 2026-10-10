@@ -3,6 +3,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -47,6 +48,10 @@ interface ProductoConResumen {
 }
 
 type FiltroTipo = 'todas' | TipoProducto;
+
+function formatearCantidad(valor: number): string {
+  return valor.toLocaleString('es-MX', { maximumFractionDigits: 3 });
+}
 
 const OPCIONES_PERIODO: OpcionChip<TipoPeriodo>[] = [
   { valor: 'hoy', etiqueta: 'Hoy' },
@@ -180,7 +185,7 @@ export function VentasScreen() {
     if (productoElegido == null) return;
     setGuardando(true);
     try {
-      await registrarVenta(db, {
+      const { faltantes } = await registrarVenta(db, {
         producto: { tipo: productoElegido.tipo, id: productoElegido.id },
         cantidad: cantidadVenta,
         fecha: fechaAVentaISO(fechaVenta),
@@ -188,6 +193,19 @@ export function VentasScreen() {
       setModalRegistro(false);
       setProductoElegido(null);
       await recargar();
+      if (faltantes.length > 0) {
+        const detalle = faltantes
+          .map(
+            (f) =>
+              `${f.nombre}: faltan ${formatearCantidad(f.requerido - f.disponible)} ${f.unidad.trim()} ` +
+              `(disponible ${formatearCantidad(f.disponible)} ${f.unidad.trim()})`
+          )
+          .join('\n');
+        Alert.alert(
+          'Stock insuficiente',
+          `La venta se registró, pero no hay suficiente inventario para fabricarla. Esta operación no debería existir en el almacén:\n\n${detalle}`
+        );
+      }
     } finally {
       setGuardando(false);
     }

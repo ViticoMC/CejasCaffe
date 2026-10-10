@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Inversion, NuevaInversion } from '../../domain/tipos';
+import { revertirEntradaPorInversion } from './inventario';
 
 export async function listarInversiones(db: SQLiteDatabase): Promise<Inversion[]> {
   return db.getAllAsync<Inversion>('SELECT * FROM inversiones ORDER BY creado_en DESC, id DESC');
@@ -17,10 +18,12 @@ export async function crearInversion(
   dato: NuevaInversion
 ): Promise<Inversion> {
   const resultado = await db.runAsync(
-    'INSERT INTO inversiones (nombre, descripcion, precio) VALUES (?, ?, ?)',
+    'INSERT INTO inversiones (nombre, descripcion, precio, ingrediente_id, cantidad) VALUES (?, ?, ?, ?, ?)',
     dato.nombre.trim(),
     dato.descripcion?.trim() || null,
-    dato.precio
+    dato.precio,
+    dato.ingrediente_id ?? null,
+    dato.cantidad ?? null
   );
   const creada = await obtenerInversion(db, resultado.lastInsertRowId);
   if (!creada) {
@@ -44,5 +47,13 @@ export async function actualizarInversion(
 }
 
 export async function eliminarInversion(db: SQLiteDatabase, id: number): Promise<void> {
+  const inversion = await obtenerInversion(db, id);
+  if (inversion?.ingrediente_id != null) {
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await revertirEntradaPorInversion(txn, id);
+      await txn.runAsync('DELETE FROM inversiones WHERE id = ?', id);
+    });
+    return;
+  }
   await db.runAsync('DELETE FROM inversiones WHERE id = ?', id);
 }

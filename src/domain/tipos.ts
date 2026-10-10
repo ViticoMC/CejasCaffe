@@ -3,6 +3,8 @@ export interface Ingrediente {
   nombre: string;
   unidad: string;
   precio_unitario: number;
+  stock: number;
+  stock_minimo: number;
   creado_en: string;
   actualizado_en: string;
 }
@@ -11,6 +13,38 @@ export interface NuevoIngrediente {
   nombre: string;
   unidad: string;
   precio_unitario: number;
+  stock_minimo?: number;
+}
+
+export type TipoMovimiento = 'entrada' | 'salida' | 'ajuste';
+
+export interface MovimientoInventario {
+  id: number;
+  ingrediente_id: number;
+  tipo: TipoMovimiento;
+  cantidad: number;
+  motivo: string | null;
+  venta_id: number | null;
+  inversion_id: number | null;
+  creado_en: string;
+}
+
+export interface ItemMovimiento extends MovimientoInventario {
+  nombre_ingrediente: string;
+  unidad: string;
+}
+
+export interface EntradaInventario {
+  ingrediente_id: number;
+  cantidad: number;
+  costoTotal: number;
+  motivo?: string | null;
+}
+
+export interface AjusteInventario {
+  ingrediente_id: number;
+  cantidadNueva: number;
+  motivo?: string | null;
 }
 
 export interface Bebida {
@@ -110,6 +144,14 @@ export interface NuevaVenta {
   fecha?: string;
 }
 
+export interface FaltanteStock {
+  ingrediente_id: number;
+  nombre: string;
+  unidad: string;
+  disponible: number;
+  requerido: number;
+}
+
 export interface FiltroVentas {
   desde?: string;
   hasta?: string;
@@ -130,6 +172,8 @@ export interface Inversion {
   nombre: string;
   descripcion: string | null;
   precio: number;
+  ingrediente_id: number | null;
+  cantidad: number | null;
   creado_en: string;
   actualizado_en: string;
 }
@@ -138,4 +182,6 @@ export interface NuevaInversion {
   nombre: string;
   descripcion?: string | null;
   precio: number;
+  ingrediente_id?: number | null;
+  cantidad?: number | null;
 }

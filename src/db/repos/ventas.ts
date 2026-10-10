@@ -1,25 +1,34 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { calcularResumenReceta } from '../../domain/calculos';
-import type { FiltroVentas, NuevaVenta, Venta } from '../../domain/tipos';
+import type {
+  FaltanteStock,
+  FiltroVentas,
+  ItemReceta,
+  ItemServicioMaterial,
+  NuevaVenta,
+  Venta,
+} from '../../domain/tipos';
 import { obtenerBebida, obtenerReceta } from './bebidas';
+import { aplicarSalidaVenta, revertirMovimientosVenta } from './inventario';
 import { obtenerRecetaServicio, obtenerServicio } from './servicios';
 
 export async function registrarVenta(
   db: SQLiteDatabase,
   dato: NuevaVenta
-): Promise<Venta> {
+): Promise<{ venta: Venta; faltantes: FaltanteStock[] }> {
   const esServicio = dato.producto.tipo === 'servicio';
 
   let nombre: string;
   let precioVenta: number;
   let costoProduccion: number;
+  let receta: (ItemReceta | ItemServicioMaterial)[];
 
   if (esServicio) {
     const servicio = await obtenerServicio(db, dato.producto.id);
     if (!servicio) {
       throw new Error('Servicio no encontrado');
     }
-    const receta = await obtenerRecetaServicio(db, dato.producto.id);
+    receta = await obtenerRecetaServicio(db, dato.producto.id);
     const resumen = calcularResumenReceta(receta, servicio.porcentaje_ganancia);
     nombre = servicio.nombre;
     precioVenta = resumen.precioVenta;
@@ -29,7 +38,7 @@ export async function registrarVenta(
     if (!bebida) {
       throw new Error('Bebida no encontrada');
     }
-    const receta = await obtenerReceta(db, dato.producto.id);
+    receta = await obtenerReceta(db, dato.producto.id);
     const resumen = calcularResumenReceta(receta, bebida.porcentaje_ganancia);
     nombre = bebida.nombre;
     precioVenta = resumen.precioVenta;
@@ -50,20 +59,46 @@ export async function registrarVenta(
     costoProduccion,
   ];
 
-  const resultado = await db.runAsync(
-    `INSERT INTO ventas ${columnas}
-     VALUES (?, ?, ?, ?, ?, ?${conFecha ? ', ?' : ''})`,
-    ...valores,
-    ...(dato.fecha ? [dato.fecha] : [])
-  );
-  const venta = await db.getFirstAsync<Venta>(
-    'SELECT * FROM ventas WHERE id = ?',
-    resultado.lastInsertRowId
-  );
+  const consumos = receta.map((item) => ({
+    ingrediente_id: item.ingrediente_id,
+    cantidad: item.cantidad * dato.cantidad,
+  }));
+
+  const faltantes: FaltanteStock[] = [];
+  let ventaId = 0;
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    for (const consumo of consumos) {
+      const existen = await txn.getFirstAsync<{ stock: number }>(
+        'SELECT stock FROM ingredientes WHERE id = ?',
+        consumo.ingrediente_id
+      );
+      if (existen != null && consumo.cantidad > existen.stock) {
+        const item = receta.find((r) => r.ingrediente_id === consumo.ingrediente_id);
+        faltantes.push({
+          ingrediente_id: consumo.ingrediente_id,
+          nombre: item?.nombre_ingrediente ?? 'Material',
+          unidad: item?.unidad ?? '',
+          disponible: existen.stock,
+          requerido: Math.round((consumo.cantidad + Number.EPSILON) * 100) / 100,
+        });
+      }
+    }
+
+    const resultado = await txn.runAsync(
+      `INSERT INTO ventas ${columnas}
+       VALUES (?, ?, ?, ?, ?, ?${conFecha ? ', ?' : ''})`,
+      ...valores,
+      ...(dato.fecha ? [dato.fecha] : [])
+    );
+    ventaId = resultado.lastInsertRowId;
+    await aplicarSalidaVenta(txn, ventaId, consumos);
+  });
+
+  const venta = await db.getFirstAsync<Venta>('SELECT * FROM ventas WHERE id = ?', ventaId);
   if (!venta) {
     throw new Error('No se pudo registrar la venta');
   }
-  return venta;
+  return { venta, faltantes };
 }
 
 export async function listarVentas(
@@ -108,5 +143,8 @@ export async function listarVentas(
 }
 
 export async function eliminarVenta(db: SQLiteDatabase, id: number): Promise<void> {
-  await db.runAsync('DELETE FROM ventas WHERE id = ?', id);
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    await revertirMovimientosVenta(txn, id);
+    await txn.runAsync('DELETE FROM ventas WHERE id = ?', id);
+  });
 }

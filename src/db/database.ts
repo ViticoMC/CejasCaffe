@@ -1,7 +1,7 @@
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 export const DATABASE_NAME = 'misventas.db';
-export const DATABASE_VERSION = 4;
+export const DATABASE_VERSION = 5;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL;');
@@ -127,6 +127,31 @@ CREATE INDEX IF NOT EXISTS idx_ventas_bebida ON ventas(bebida_id);
 CREATE INDEX IF NOT EXISTS idx_ventas_servicio ON ventas(servicio_id);
 `);
     currentVersion = 4;
+  }
+
+  if (currentVersion === 4) {
+    await db.execAsync(`
+ALTER TABLE ingredientes ADD COLUMN stock REAL NOT NULL DEFAULT 0;
+ALTER TABLE ingredientes ADD COLUMN stock_minimo REAL NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS movimientos_inventario (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ingrediente_id INTEGER NOT NULL REFERENCES ingredientes(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('entrada', 'salida', 'ajuste')),
+  cantidad REAL NOT NULL CHECK (cantidad >= 0),
+  motivo TEXT,
+  venta_id INTEGER REFERENCES ventas(id) ON DELETE CASCADE,
+  inversion_id INTEGER REFERENCES inversiones(id) ON DELETE SET NULL,
+  creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_movimientos_ingrediente ON movimientos_inventario(ingrediente_id);
+CREATE INDEX IF NOT EXISTS idx_movimientos_venta ON movimientos_inventario(venta_id);
+
+ALTER TABLE inversiones ADD COLUMN ingrediente_id INTEGER REFERENCES ingredientes(id) ON DELETE SET NULL;
+ALTER TABLE inversiones ADD COLUMN cantidad REAL;
+`);
+    currentVersion = 5;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

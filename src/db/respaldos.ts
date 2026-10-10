@@ -4,13 +4,14 @@ import type {
   BebidaIngrediente,
   Ingrediente,
   Inversion,
+  MovimientoInventario,
   Servicio,
   ServicioMaterial,
   Venta,
 } from '../domain/tipos';
 
 export const ESCHEMA_RESPALDO = 'misventas';
-export const VERSION_RESPALDO = 1;
+export const VERSION_RESPALDO = 2;
 
 export type FilaBebidaRespaldo = Omit<Bebida, 'activo'> & { activo: 0 | 1 };
 export type FilaServicioRespaldo = Omit<Servicio, 'activo'> & { activo: 0 | 1 };
@@ -23,6 +24,7 @@ export interface RespaldoDatos {
   servicio_materiales: ServicioMaterial[];
   ventas: Venta[];
   inversiones: Inversion[];
+  movimientos_inventario: MovimientoInventario[];
 }
 
 export interface RespaldoCompleto {
@@ -39,6 +41,7 @@ export interface ResumenRestauracion {
   servicios: number;
   ventas: number;
   inversiones: number;
+  movimientos_inventario: number;
 }
 
 const TABLAS_RESPALDO: (keyof RespaldoDatos)[] = [
@@ -49,10 +52,11 @@ const TABLAS_RESPALDO: (keyof RespaldoDatos)[] = [
   'servicio_materiales',
   'ventas',
   'inversiones',
+  'movimientos_inventario',
 ];
 
 export async function exportarRespaldo(db: SQLiteDatabase): Promise<string> {
-  const [ingredientes, bebidas, bebida_ingredientes, servicios, servicio_materiales, ventas, inversiones] =
+  const [ingredientes, bebidas, bebida_ingredientes, servicios, servicio_materiales, ventas, inversiones, movimientos_inventario] =
     await Promise.all([
       db.getAllAsync<Ingrediente>('SELECT * FROM ingredientes'),
       db.getAllAsync<FilaBebidaRespaldo>('SELECT * FROM bebidas'),
@@ -61,6 +65,7 @@ export async function exportarRespaldo(db: SQLiteDatabase): Promise<string> {
       db.getAllAsync<ServicioMaterial>('SELECT * FROM servicio_materiales'),
       db.getAllAsync<Venta>('SELECT * FROM ventas'),
       db.getAllAsync<Inversion>('SELECT * FROM inversiones'),
+      db.getAllAsync<MovimientoInventario>('SELECT * FROM movimientos_inventario'),
     ]);
 
   const respaldo: RespaldoCompleto = {
@@ -76,6 +81,7 @@ export async function exportarRespaldo(db: SQLiteDatabase): Promise<string> {
       servicio_materiales,
       ventas,
       inversiones,
+      movimientos_inventario,
     },
   };
 
@@ -106,6 +112,10 @@ function validarRespaldo(contenido: string): RespaldoCompleto {
 
   for (const tabla of TABLAS_RESPALDO) {
     if (!Array.isArray(datos[tabla])) {
+      if (tabla === 'movimientos_inventario') {
+        (datos as Record<string, unknown>)[tabla] = [];
+        continue;
+      }
       throw new Error(`El respaldo está incompleto (falta la tabla ${tabla}).`);
     }
   }
@@ -126,6 +136,7 @@ export function resumenDeRespaldo(respaldo: RespaldoCompleto): ResumenRestauraci
     servicios: datos.servicios.length,
     ventas: datos.ventas.length,
     inversiones: datos.inversiones.length,
+    movimientos_inventario: datos.movimientos_inventario.length,
   };
 }
 
@@ -138,6 +149,7 @@ export async function restaurarRespaldo(
 
   await db.withExclusiveTransactionAsync(async (txn) => {
     await txn.execAsync(`
+      DELETE FROM movimientos_inventario;
       DELETE FROM ventas;
       DELETE FROM bebida_ingredientes;
       DELETE FROM servicio_materiales;
@@ -149,12 +161,14 @@ export async function restaurarRespaldo(
 
     for (const fila of datos.ingredientes) {
       await txn.runAsync(
-        `INSERT INTO ingredientes (id, nombre, unidad, precio_unitario, creado_en, actualizado_en)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO ingredientes (id, nombre, unidad, precio_unitario, stock, stock_minimo, creado_en, actualizado_en)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         fila.id,
         fila.nombre,
         fila.unidad,
         fila.precio_unitario,
+        fila.stock ?? 0,
+        fila.stock_minimo ?? 0,
         fila.creado_en,
         fila.actualizado_en
       );
@@ -227,14 +241,31 @@ export async function restaurarRespaldo(
 
     for (const fila of datos.inversiones) {
       await txn.runAsync(
-        `INSERT INTO inversiones (id, nombre, descripcion, precio, creado_en, actualizado_en)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO inversiones (id, nombre, descripcion, precio, ingrediente_id, cantidad, creado_en, actualizado_en)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         fila.id,
         fila.nombre,
         fila.descripcion,
         fila.precio,
+        fila.ingrediente_id ?? null,
+        fila.cantidad ?? null,
         fila.creado_en,
         fila.actualizado_en
+      );
+    }
+
+    for (const fila of datos.movimientos_inventario) {
+      await txn.runAsync(
+        `INSERT INTO movimientos_inventario (id, ingrediente_id, tipo, cantidad, motivo, venta_id, inversion_id, creado_en)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        fila.id,
+        fila.ingrediente_id,
+        fila.tipo,
+        fila.cantidad,
+        fila.motivo,
+        fila.venta_id ?? null,
+        fila.inversion_id ?? null,
+        fila.creado_en
       );
     }
   });

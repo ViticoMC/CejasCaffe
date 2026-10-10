@@ -34,6 +34,10 @@ function parsearPrecio(texto: string): number {
   return Number.isFinite(valor) ? valor : NaN;
 }
 
+function formatearCantidad(valor: number): string {
+  return valor.toLocaleString('es-MX', { maximumFractionDigits: 3 });
+}
+
 interface FormularioProps {
   inicial: Ingrediente | null;
   onGuardar: (dato: NuevoIngrediente) => Promise<void>;
@@ -45,6 +49,9 @@ function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioPro
   const [unidad, setUnidad] = useState(inicial?.unidad ?? '');
   const [precio, setPrecio] = useState(
     inicial != null ? String(inicial.precio_unitario) : ''
+  );
+  const [stockMinimo, setStockMinimo] = useState(
+    inicial != null && inicial.stock_minimo > 0 ? String(inicial.stock_minimo) : ''
   );
   const [errorNombre, setErrorNombre] = useState<string | undefined>();
   const [errorPrecio, setErrorPrecio] = useState<string | undefined>();
@@ -69,10 +76,12 @@ function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioPro
     if (!validar()) return;
     setGuardando(true);
     try {
+      const minimo = parsearPrecio(stockMinimo);
       await onGuardar({
         nombre: nombre.trim(),
         unidad: unidad.trim(),
         precio_unitario: parsearPrecio(precio),
+        stock_minimo: Number.isFinite(minimo) && minimo > 0 ? minimo : 0,
       });
     } finally {
       setGuardando(false);
@@ -102,6 +111,13 @@ function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioPro
         placeholder="0.00"
         keyboardType="decimal-pad"
         error={errorPrecio}
+      />
+      <Input
+        label="Stock mínimo (alerta)"
+        value={stockMinimo}
+        onChangeText={setStockMinimo}
+        placeholder="Opcional · 0"
+        keyboardType="decimal-pad"
       />
       <View style={estilos.footerFormulario}>
         <Button
@@ -190,7 +206,9 @@ export function IngredientesScreen() {
         <PriceTag precio={item.precio_unitario} />
       </View>
       <View style={estilos.filaAcciones}>
-        <Text style={tipografia.micro}>Precio unitario</Text>
+        <Text style={tipografia.micro}>
+          Precio unitario · Stock {formatearCantidad(item.stock)} {item.unidad.trim()}
+        </Text>
         <View style={estilos.botonesAccion}>
           <Pressable
             accessibilityRole="button"
