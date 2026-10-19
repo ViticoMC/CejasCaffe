@@ -11,6 +11,7 @@ interface Props {
   minimo?: number;
   maximo?: number;
   unidad?: string;
+  entero?: boolean;
 }
 
 const DECIMALES = 3;
@@ -47,6 +48,7 @@ export function CantidadInput({
   minimo = 0,
   maximo = 999999,
   unidad,
+  entero = false,
 }: Props) {
   const [texto, setTexto] = useState(() => formatear(valor));
   const ultimo = useRef(valor);
@@ -59,7 +61,8 @@ export function CantidadInput({
   }, [valor]);
 
   const aplicar = (nuevo: number) => {
-    const acotado = redondear(Math.min(maximo, Math.max(minimo, nuevo)));
+    const ajustado = entero ? Math.round(nuevo) : nuevo;
+    const acotado = redondear(Math.min(maximo, Math.max(minimo, ajustado)));
     ultimo.current = acotado;
     setTexto(formatear(acotado));
     onChange(acotado);
@@ -70,7 +73,7 @@ export function CantidadInput({
     setTexto(limpio);
     const numero = parsear(limpio);
     if (!Number.isNaN(numero) && numero >= minimo) {
-      const acotado = Math.min(maximo, numero);
+      const acotado = Math.min(maximo, entero ? Math.round(numero) : numero);
       ultimo.current = acotado;
       onChange(acotado);
     }
@@ -79,6 +82,7 @@ export function CantidadInput({
   const actual = parsear(texto);
   const base = Number.isNaN(actual) ? valor : actual;
   const sufijo = unidad != null && unidad.trim().length > 0 ? unidad.trim() : null;
+  const sufijoRecortado = sufijo != null && sufijo.length > 12 ? sufijo.slice(0, 12) : sufijo;
 
   return (
     <View style={estilos.base}>
@@ -99,13 +103,21 @@ export function CantidadInput({
         <TextInput
           value={texto}
           onChangeText={cambiarTexto}
-          onBlur={() => setTexto(formatear(base))}
+          onBlur={() => setTexto(formatear(valor))}
           keyboardType="decimal-pad"
           selectTextOnFocus
           accessibilityLabel={sufijo != null ? `Cantidad en ${sufijo}` : 'Cantidad'}
           style={estilos.input}
         />
-        {sufijo != null && <Text style={estilos.unidad}>{sufijo}</Text>}
+        {sufijoRecortado != null && (
+          <Text
+            style={estilos.unidad}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {sufijoRecortado}
+          </Text>
+        )}
       </View>
 
       <Pressable
@@ -129,6 +141,7 @@ const estilos = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: espaciado.sm,
+    flexWrap: 'nowrap',
   },
   boton: {
     width: 40,
@@ -137,6 +150,7 @@ const estilos = StyleSheet.create({
     backgroundColor: colores.bg.subtle,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   botonApagado: {
     opacity: 0.4,
@@ -146,26 +160,31 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     gap: espaciado.xs,
     minHeight: 40,
-    minWidth: 88,
-    paddingHorizontal: espaciado.md,
+    paddingHorizontal: espaciado.sm,
     borderRadius: radio.sm,
     borderWidth: 1,
     borderColor: colores.borde.default,
     backgroundColor: colores.bg.surface,
+    flexShrink: 1,
+    minWidth: 0,
   },
   input: {
-    flex: 1,
-    minWidth: 48,
     paddingVertical: 0,
     textAlign: 'center',
     fontFamily: fuentes.outfitSemiBold,
     fontSize: 16,
     color: colores.texto.primary,
     fontVariant: ['tabular-nums'],
+    minWidth: 24,
+    flexShrink: 0,
+    flexGrow: 0,
   },
   unidad: {
     fontFamily: fuentes.outfitSemiBold,
     fontSize: 12,
     color: colores.texto.muted,
+    flexShrink: 1,
+    textAlign: 'right',
+    minWidth: 0,
   },
 });

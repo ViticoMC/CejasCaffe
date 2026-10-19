@@ -3,6 +3,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -19,7 +20,13 @@ import {
   registrarEntrada,
   type ItemInventario,
 } from '../db/repos/inventario';
-import type { ItemMovimiento, TipoMovimiento } from '../domain/tipos';
+import { crearPaquete, listarPaquetes } from '../db/repos/paquetes';
+import type {
+  ItemMovimiento,
+  NuevoPaquete,
+  Paquete,
+  TipoMovimiento,
+} from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
@@ -27,15 +34,23 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ChipSelector, type OpcionChip } from '../ui/ChipSelector';
 import { EmptyState } from '../ui/EmptyState';
+import { FormularioPaquete } from '../ui/FormularioPaquete';
 import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
 import { PriceTag } from '../ui/PriceTag';
+import { Stepper } from '../ui/Stepper';
 
 type FiltroAlmacen = 'todos' | 'bajo';
+type ModoEntrada = 'paquete' | 'cantidad';
 
 const OPCIONES_FILTRO: OpcionChip<FiltroAlmacen>[] = [
   { valor: 'todos', etiqueta: 'Todos' },
   { valor: 'bajo', etiqueta: 'Bajo mínimo' },
+];
+
+const OPCIONES_ENTRADA: OpcionChip<ModoEntrada>[] = [
+  { valor: 'paquete', etiqueta: 'Por paquete' },
+  { valor: 'cantidad', etiqueta: 'Por cantidad' },
 ];
 
 const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {
@@ -69,6 +84,13 @@ export function AlmacenScreen() {
 
   const [modalEntrada, setModalEntrada] = useState(false);
   const [entradaIngrediente, setEntradaIngrediente] = useState<ItemInventario | null>(null);
+  const [modoEntrada, setModoEntrada] = useState<ModoEntrada>('paquete');
+  const [paquetesMaterial, setPaquetesMaterial] = useState<Paquete[]>([]);
+  const [cargandoPaquetes, setCargandoPaquetes] = useState(false);
+  const [paqueteElegido, setPaqueteElegido] = useState<Paquete | null>(null);
+  const [numPaquetes, setNumPaquetes] = useState(1);
+  const [precioPaquete, setPrecioPaquete] = useState('');
+  const [creandoPaquete, setCreandoPaquete] = useState(false);
   const [cantidadEntrada, setCantidadEntrada] = useState('');
   const [costoEntrada, setCostoEntrada] = useState('');
   const [motivoEntrada, setMotivoEntrada] = useState('');
@@ -101,31 +123,139 @@ export function AlmacenScreen() {
     setCantidadEntrada('');
     setCostoEntrada('');
     setMotivoEntrada('');
+    setNumPaquetes(1);
+    setPrecioPaquete('');
+    setPaqueteElegido(null);
+    setPaquetesMaterial([]);
+    setCreandoPaquete(false);
     setModalEntrada(true);
+    if (material != null) {
+      void seleccionarMaterial(material);
+    }
   };
 
   const cerrarEntrada = () => {
     setModalEntrada(false);
     setEntradaIngrediente(null);
+    setPaquetesMaterial([]);
+    setPaqueteElegido(null);
+    setCreandoPaquete(false);
   };
 
-  const confirmarEntrada = async () => {
+  const seleccionarMaterial = async (material: ItemInventario) => {
+    setEntradaIngrediente(material);
+    setCantidadEntrada('');
+    setCostoEntrada('');
+    setMotivoEntrada('');
+    setNumPaquetes(1);
+    setPrecioPaquete('');
+    setCreandoPaquete(false);
+    setCargandoPaquetes(true);
+    try {
+      const lista = await listarPaquetes(db, material.id);
+      setPaquetesMaterial(lista);
+      const primero = lista[0] ?? null;
+      setPaqueteElegido(primero);
+      if (primero != null) {
+        setPrecioPaquete(String(primero.precio));
+      }
+    } finally {
+      setCargandoPaquetes(false);
+    }
+  };
+
+  const guardarPaqueteEntrada = async (dato: NuevoPaquete) => {
     if (entradaIngrediente == null) return;
+    const creado = await crearPaquete(db, entradaIngrediente.id, dato);
+    setPaquetesMaterial(await listarPaquetes(db, entradaIngrediente.id));
+    setPaqueteElegido(creado);
+    setPrecioPaquete(String(creado.precio));
+    setCreandoPaquete(false);
+  };
+
+  const previaEntrada = useMemo(() => {
+    if (entradaIngrediente == null) return null;
+    const stock = entradaIngrediente.stock;
+    const actual = entradaIngrediente.precio_unitario;
+    if (modoEntrada === 'paquete') {
+      if (paqueteElegido == null) return null;
+      const precio = parsearCantidad(precioPaquete);
+      if (!Number.isFinite(numPaquetes) || numPaquetes <= 0) return null;
+      if (Number.isNaN(precio) || precio <= 0) return null;
+      const cantidad = numPaquetes * paqueteElegido.cantidad;
+      const costo = numPaquetes * precio;
+      return {
+        resumen: `${numPaquetes} × ${paqueteElegido.nombre} = ${formatearCantidad(cantidad)} ${entradaIngrediente.unidad.trim()}`,
+        cantidad,
+        costo,
+        porUnidad: paqueteElegido.cantidad > 0 ? precio / paqueteElegido.cantidad : 0,
+        nuevoPromedio:
+          stock + cantidad > 0 ? (stock * actual + costo) / (stock + cantidad) : actual,
+      };
+    }
     const cantidad = parsearCantidad(cantidadEntrada);
-    const costoTotal = parsearCantidad(costoEntrada);
-    if (Number.isNaN(cantidad) || cantidad <= 0) return;
-    if (Number.isNaN(costoTotal) || costoTotal <= 0) return;
+    const costo = parsearCantidad(costoEntrada);
+    if (Number.isNaN(cantidad) || cantidad <= 0) return null;
+    if (Number.isNaN(costo) || costo <= 0) return null;
+    return {
+      resumen: `Entrarán ${formatearCantidad(cantidad)} ${entradaIngrediente.unidad.trim()}`,
+      cantidad,
+      costo,
+      porUnidad: costo / cantidad,
+      nuevoPromedio:
+        stock + cantidad > 0 ? (stock * actual + costo) / (stock + cantidad) : actual,
+    };
+  }, [
+    entradaIngrediente,
+    modoEntrada,
+    paqueteElegido,
+    precioPaquete,
+    numPaquetes,
+    cantidadEntrada,
+    costoEntrada,
+  ]);
+
+  const puedeConfirmar =
+    entradaIngrediente != null &&
+    (modoEntrada === 'paquete'
+      ? paqueteElegido != null &&
+        !cargandoPaquetes &&
+        Number.isFinite(numPaquetes) &&
+        numPaquetes > 0 &&
+        previaEntrada != null
+      : previaEntrada != null);
+
+  const confirmarEntrada = async () => {
+    if (entradaIngrediente == null || !puedeConfirmar) return;
 
     setGuardando(true);
     try {
-      await registrarEntrada(db, {
-        ingrediente_id: entradaIngrediente.id,
-        cantidad,
-        costoTotal,
-        motivo: motivoEntrada.trim().length > 0 ? motivoEntrada.trim() : null,
-      });
+      const motivo = motivoEntrada.trim().length > 0 ? motivoEntrada.trim() : null;
+      if (modoEntrada === 'paquete' && paqueteElegido != null && previaEntrada != null) {
+        const precio = parsearCantidad(precioPaquete);
+        await registrarEntrada(db, {
+          ingrediente_id: entradaIngrediente.id,
+          paquete_id: paqueteElegido.id,
+          paquetes: numPaquetes,
+          precioPaquete: precio,
+          motivo,
+        });
+      } else {
+        if (previaEntrada == null) return;
+        await registrarEntrada(db, {
+          ingrediente_id: entradaIngrediente.id,
+          cantidad: previaEntrada.cantidad,
+          costoTotal: previaEntrada.costo,
+          motivo,
+        });
+      }
       cerrarEntrada();
       await recargar();
+    } catch (error) {
+      Alert.alert(
+        'No se pudo registrar',
+        error instanceof Error ? error.message : 'Intenta de nuevo.'
+      );
     } finally {
       setGuardando(false);
     }
@@ -350,12 +480,14 @@ export function AlmacenScreen() {
         titulo={entradaIngrediente != null ? `Entrada de ${entradaIngrediente.nombre}` : 'Registrar entrada'}
         subtitulo={
           entradaIngrediente != null
-            ? `Existencia actual: ${formatearCantidad(entradaIngrediente.stock)} ${entradaIngrediente.unidad.trim()}`
+            ? `Existencia actual: ${formatearCantidad(entradaIngrediente.stock)} ${entradaIngrediente.unidad.trim()} · ${formatearDinero(entradaIngrediente.precio_unitario)} por ${entradaIngrediente.unidad.trim()}`
             : 'Elige el material que entró al almacén.'
         }
         onClose={cerrarEntrada}
+        scrollable
+        maxAlturaCuerpo={height * 0.6}
         footer={
-          entradaIngrediente != null ? (
+          entradaIngrediente != null && !creandoPaquete ? (
             <>
               <Button
                 label="Cancelar"
@@ -368,7 +500,7 @@ export function AlmacenScreen() {
                 label="Registrar entrada"
                 icon="check"
                 onPress={confirmarEntrada}
-                disabled={guardando}
+                disabled={guardando || !puedeConfirmar}
                 style={estilos.botonMitad}
               />
             </>
@@ -381,57 +513,132 @@ export function AlmacenScreen() {
               No hay materiales en el sistema. Crea uno en la pestaña Materiales.
             </Text>
           ) : (
-            <FlatList
-              data={inventario}
-              keyExtractor={(item) => String(item.id)}
-              style={{ maxHeight: height * 0.45 }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Entrada de ${item.nombre}`}
-                  onPress={() => {
-                    setEntradaIngrediente(item);
-                    setCantidadEntrada('');
-                    setCostoEntrada('');
-                    setMotivoEntrada('');
-                  }}
-                  style={({ pressed }) => [
-                    estilos.filaMaterial,
-                    pressed && estilos.presionado,
-                  ]}
-                >
-                  <View style={estilos.infoMaterial}>
-                    <Text style={tipografia.small} numberOfLines={1}>
-                      {item.nombre}
-                    </Text>
-                    <Text style={tipografia.micro}>
-                      Stock {formatearCantidad(item.stock)} {item.unidad.trim()}
-                    </Text>
-                  </View>
-                  <Badge label={item.unidad.trim()} tone="info" />
-                </Pressable>
-              )}
-            />
+            inventario.map((item) => (
+              <Pressable
+                key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Entrada de ${item.nombre}`}
+                onPress={() => void seleccionarMaterial(item)}
+                style={({ pressed }) => [
+                  estilos.filaMaterial,
+                  pressed && estilos.presionado,
+                ]}
+              >
+                <View style={estilos.infoMaterial}>
+                  <Text style={tipografia.small} numberOfLines={1}>
+                    {item.nombre}
+                  </Text>
+                  <Text style={tipografia.micro}>
+                    Stock {formatearCantidad(item.stock)} {item.unidad.trim()}
+                  </Text>
+                </View>
+                <Badge label={item.unidad.trim()} tone="info" />
+              </Pressable>
+            ))
           )
+        ) : creandoPaquete ? (
+          <FormularioPaquete
+            key={`paquete-${entradaIngrediente.id}`}
+            material={{
+              nombre: entradaIngrediente.nombre,
+              unidad: entradaIngrediente.unidad,
+            }}
+            inicial={null}
+            onGuardar={guardarPaqueteEntrada}
+            onCancelar={() => setCreandoPaquete(false)}
+          />
         ) : (
           <>
-            <Input
-              label={`Cantidad (${entradaIngrediente.unidad.trim()})`}
-              value={cantidadEntrada}
-              onChangeText={setCantidadEntrada}
-              placeholder="0"
-              keyboardType="decimal-pad"
-              autoFocus
+            <ChipSelector
+              opciones={OPCIONES_ENTRADA}
+              seleccionado={modoEntrada}
+              onSeleccionar={setModoEntrada}
             />
-            <Input
-              label="Costo total de la compra"
-              value={costoEntrada}
-              onChangeText={setCostoEntrada}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-            />
+            {modoEntrada === 'paquete' ? (
+              cargandoPaquetes ? (
+                <ActivityIndicator color={colores.brand.secondary} size="large" />
+              ) : paquetesMaterial.length === 0 ? (
+                <>
+                  <Text style={tipografia.small}>
+                    Este material aún no tiene paquetes. Crea uno para registrar la compra de un
+                    solo toque.
+                  </Text>
+                  <Button
+                    label="Crear paquete"
+                    icon="plus"
+                    onPress={() => setCreandoPaquete(true)}
+                  />
+                </>
+              ) : (
+                <>
+                  <View style={estilos.bloquePaquete}>
+                    <Text style={tipografia.small}>Paquete</Text>
+                    <ChipSelector
+                      opciones={paquetesMaterial.map((paquete) => ({
+                        valor: paquete.id,
+                        etiqueta: paquete.nombre,
+                      }))}
+                      seleccionado={paqueteElegido?.id ?? -1}
+                      onSeleccionar={(id) => {
+                        const elegido = paquetesMaterial.find((p) => p.id === id) ?? null;
+                        setPaqueteElegido(elegido);
+                        if (elegido != null) {
+                          setPrecioPaquete(String(elegido.precio));
+                        }
+                      }}
+                    />
+                  </View>
+                  <View style={estilos.bloquePaquete}>
+                    <Text style={tipografia.small}>Paquetes a comprar</Text>
+                    <Stepper valor={numPaquetes} onChange={setNumPaquetes} minimo={1} />
+                  </View>
+                  <Input
+                    label="Precio del paquete"
+                    value={precioPaquete}
+                    onChangeText={setPrecioPaquete}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                  />
+                  {paqueteElegido != null &&
+                    !Number.isNaN(parsearCantidad(precioPaquete)) &&
+                    parsearCantidad(precioPaquete) !== paqueteElegido.precio && (
+                      <Text style={[tipografia.micro, estilos.avisoPrecio]}>
+                        Al guardar, este precio reemplazará al del catálogo.
+                      </Text>
+                    )}
+                </>
+              )
+            ) : (
+              <>
+                <Input
+                  label={`Cantidad (${entradaIngrediente.unidad.trim()})`}
+                  value={cantidadEntrada}
+                  onChangeText={setCantidadEntrada}
+                  placeholder="0"
+                  keyboardType="decimal-pad"
+                />
+                <Input
+                  label="Costo total de la compra"
+                  value={costoEntrada}
+                  onChangeText={setCostoEntrada}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                />
+              </>
+            )}
+            {previaEntrada != null && (
+              <View style={estilos.previa}>
+                <View style={estilos.previaFila}>
+                  <Text style={tipografia.small}>{previaEntrada.resumen}</Text>
+                  <PriceTag precio={previaEntrada.costo} />
+                </View>
+                <Text style={tipografia.micro}>
+                  {formatearDinero(previaEntrada.porUnidad)} por{' '}
+                  {entradaIngrediente.unidad.trim()} · Nuevo precio unitario{' '}
+                  {formatearDinero(previaEntrada.nuevoPromedio)}
+                </Text>
+              </View>
+            )}
             <Input
               label="Motivo"
               value={motivoEntrada}
@@ -522,6 +729,11 @@ export function AlmacenScreen() {
                   {movimiento.motivo != null && movimiento.motivo.length > 0 && (
                     <Text style={tipografia.micro} numberOfLines={1}>
                       {movimiento.motivo}
+                    </Text>
+                  )}
+                  {movimiento.nombre_paquete != null && (
+                    <Text style={tipografia.micro} numberOfLines={1}>
+                      {movimiento.nombre_paquete}
                     </Text>
                   )}
                 </View>
@@ -669,6 +881,27 @@ const estilos = StyleSheet.create({
   },
   sinMateriales: {
     textAlign: 'center',
+  },
+  bloquePaquete: {
+    gap: espaciado.sm,
+  },
+  avisoPrecio: {
+    color: colores.brand.accent,
+  },
+  previa: {
+    gap: espaciado.xs,
+    backgroundColor: colores.bg.subtle,
+    borderRadius: radio.md,
+    borderWidth: 1,
+    borderColor: colores.borde.default,
+    paddingHorizontal: espaciado.lg,
+    paddingVertical: espaciado.md,
+  },
+  previaFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: espaciado.md,
   },
   filaMaterial: {
     flexDirection: 'row',

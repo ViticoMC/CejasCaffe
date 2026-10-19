@@ -3,6 +3,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -17,13 +18,21 @@ import {
   eliminarIngrediente,
   listarIngredientes,
 } from '../db/repos/ingredientes';
-import type { Ingrediente, NuevoIngrediente } from '../domain/tipos';
+import {
+  crearPaquete,
+  eliminarPaquete,
+  listarPaquetes,
+  actualizarPaquete,
+} from '../db/repos/paquetes';
+import { precioUnitarioDePaquete } from '../domain/calculos';
+import type { Ingrediente, NuevoIngrediente, NuevoPaquete, Paquete } from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
-import { tipografia } from '../theme/typography';
+import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
+import { FormularioPaquete } from '../ui/FormularioPaquete';
 import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
 import { PriceTag } from '../ui/PriceTag';
@@ -47,29 +56,20 @@ interface FormularioProps {
 function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioProps) {
   const [nombre, setNombre] = useState(inicial?.nombre ?? '');
   const [unidad, setUnidad] = useState(inicial?.unidad ?? '');
-  const [precio, setPrecio] = useState(
-    inicial != null ? String(inicial.precio_unitario) : ''
-  );
   const [stockMinimo, setStockMinimo] = useState(
     inicial != null && inicial.stock_minimo > 0 ? String(inicial.stock_minimo) : ''
   );
   const [errorNombre, setErrorNombre] = useState<string | undefined>();
-  const [errorPrecio, setErrorPrecio] = useState<string | undefined>();
   const [guardando, setGuardando] = useState(false);
 
   const validar = (): boolean => {
     const nombreLimpio = nombre.trim();
-    const valorPrecio = parsearPrecio(precio);
-    let ok = true;
-    setErrorNombre(nombreLimpio.length === 0 ? 'Escribe un nombre para el material.' : undefined);
-    if (nombreLimpio.length === 0) ok = false;
-    if (Number.isNaN(valorPrecio) || valorPrecio <= 0) {
-      setErrorPrecio('El precio unitario debe ser mayor a 0.');
-      ok = false;
-    } else {
-      setErrorPrecio(undefined);
+    if (nombreLimpio.length === 0) {
+      setErrorNombre('Escribe un nombre para el material.');
+      return false;
     }
-    return ok;
+    setErrorNombre(undefined);
+    return true;
   };
 
   const guardar = async () => {
@@ -80,7 +80,6 @@ function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioPro
       await onGuardar({
         nombre: nombre.trim(),
         unidad: unidad.trim(),
-        precio_unitario: parsearPrecio(precio),
         stock_minimo: Number.isFinite(minimo) && minimo > 0 ? minimo : 0,
       });
     } finally {
@@ -103,14 +102,6 @@ function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioPro
         value={unidad}
         onChangeText={setUnidad}
         placeholder="p. ej. g, ml, pza"
-      />
-      <Input
-        label="Precio unitario"
-        value={precio}
-        onChangeText={setPrecio}
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-        error={errorPrecio}
       />
       <Input
         label="Stock mínimo (alerta)"
@@ -147,6 +138,10 @@ export function IngredientesScreen() {
   const [editando, setEditando] = useState<Ingrediente | null>(null);
   const [eliminando, setEliminando] = useState<Ingrediente | null>(null);
   const [usoEliminando, setUsoEliminando] = useState({ bebidas: 0, servicios: 0 });
+  const [materialPaquetes, setMaterialPaquetes] = useState<Ingrediente | null>(null);
+  const [paquetes, setPaquetes] = useState<Paquete[]>([]);
+  const [cargandoPaquetes, setCargandoPaquetes] = useState(false);
+  const [formPaquete, setFormPaquete] = useState<{ inicial: Paquete | null } | null>(null);
 
   const recargar = useCallback(async () => {
     setCargando(true);
@@ -194,6 +189,57 @@ export function IngredientesScreen() {
     setEliminando(ingrediente);
   };
 
+  const abrirPaquetes = async (ingrediente: Ingrediente) => {
+    setMaterialPaquetes(ingrediente);
+    setFormPaquete(null);
+    setCargandoPaquetes(true);
+    try {
+      setPaquetes(await listarPaquetes(db, ingrediente.id));
+    } finally {
+      setCargandoPaquetes(false);
+    }
+  };
+
+  const cerrarPaquetes = () => {
+    setMaterialPaquetes(null);
+    setFormPaquete(null);
+    setPaquetes([]);
+  };
+
+  const refrescarPaquetes = async () => {
+    if (materialPaquetes == null) return;
+    setPaquetes(await listarPaquetes(db, materialPaquetes.id));
+  };
+
+  const guardarPaquete = async (dato: NuevoPaquete) => {
+    if (materialPaquetes == null) return;
+    if (formPaquete?.inicial != null) {
+      await actualizarPaquete(db, formPaquete.inicial.id, dato);
+    } else {
+      await crearPaquete(db, materialPaquetes.id, dato);
+    }
+    setFormPaquete(null);
+    await refrescarPaquetes();
+  };
+
+  const preguntarEliminarPaquete = (paquete: Paquete) => {
+    Alert.alert(
+      '¿Eliminar paquete?',
+      `${paquete.nombre} dejará de estar disponible en el almacén.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            await eliminarPaquete(db, paquete.id);
+            await refrescarPaquetes();
+          },
+        },
+      ]
+    );
+  };
+
   const renderItem = ({ item }: { item: Ingrediente }) => (
     <Card style={estilos.card}>
       <View style={estilos.filaSuperior}>
@@ -207,9 +253,17 @@ export function IngredientesScreen() {
       </View>
       <View style={estilos.filaAcciones}>
         <Text style={tipografia.micro}>
-          Precio unitario · Stock {formatearCantidad(item.stock)} {item.unidad.trim()}
+          Stock {formatearCantidad(item.stock)} {item.unidad.trim()}
         </Text>
         <View style={estilos.botonesAccion}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Paquetes de ${item.nombre}`}
+            onPress={() => void abrirPaquetes(item)}
+            style={estilos.botonAccion}
+          >
+            <Feather name="package" size={18} color={colores.brand.primary} />
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Editar ${item.nombre}`}
@@ -280,7 +334,7 @@ export function IngredientesScreen() {
         subtitulo={
           editando != null
             ? 'Actualiza los datos y guarda los cambios.'
-            : 'Nombre, unidad de medida y precio unitario.'
+            : 'Nombre, unidad de medida y stock mínimo.'
         }
         onClose={() => {
           setFormularioAbierto(false);
@@ -296,6 +350,97 @@ export function IngredientesScreen() {
             setEditando(null);
           }}
         />
+      </Modal>
+
+      <Modal
+        visible={materialPaquetes != null}
+        titulo={
+          formPaquete == null
+            ? 'Paquetes'
+            : formPaquete.inicial != null
+              ? 'Editar paquete'
+              : 'Nuevo paquete'
+        }
+        subtitulo={
+          materialPaquetes != null
+            ? formPaquete == null
+              ? `${materialPaquetes.nombre} · se usan al registrar entradas en el almacén.`
+              : materialPaquetes.nombre
+            : undefined
+        }
+        onClose={cerrarPaquetes}
+        scrollable
+        footer={
+          formPaquete == null ? (
+            <Button
+              label="Nuevo paquete"
+              icon="plus"
+              onPress={() => setFormPaquete({ inicial: null })}
+              style={estilos.botonMitad}
+            />
+          ) : undefined
+        }
+      >
+        {formPaquete != null ? (
+          <FormularioPaquete
+            key={formPaquete.inicial?.id ?? 'nuevo'}
+            material={{
+              nombre: materialPaquetes?.nombre ?? '',
+              unidad: materialPaquetes?.unidad ?? '',
+            }}
+            inicial={formPaquete.inicial}
+            onGuardar={guardarPaquete}
+            onCancelar={() => setFormPaquete(null)}
+          />
+        ) : cargandoPaquetes ? (
+          <ActivityIndicator color={colores.brand.secondary} size="large" />
+        ) : paquetes.length === 0 ? (
+          <EmptyState
+            titulo="Aún no hay paquetes"
+            texto="Crea paquetes como «Paquete 230 g en $1000» para registrar compras de un solo toque y mantener el precio unitario al día."
+            accion={{ label: 'Nuevo paquete', onPress: () => setFormPaquete({ inicial: null }) }}
+          />
+        ) : (
+          paquetes.map((paquete, indice) => {
+            const unidad = (materialPaquetes?.unidad ?? '').trim();
+            return (
+              <View
+                key={paquete.id}
+                style={[estilos.filaPaquete, indice > 0 && estilos.filaPaqueteDividida]}
+              >
+                <View style={estilos.infoPaquete}>
+                  <Text style={tipografia.small} numberOfLines={1}>
+                    {paquete.nombre}
+                  </Text>
+                  <Text style={tipografia.micro}>
+                    {formatearCantidad(paquete.cantidad)} {unidad} ·{' '}
+                    {formatearDinero(precioUnitarioDePaquete(paquete))}
+                    {unidad !== '' && ` por ${unidad}`}
+                  </Text>
+                </View>
+                <PriceTag precio={paquete.precio} />
+                <View style={estilos.botonesAccion}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar ${paquete.nombre}`}
+                    onPress={() => setFormPaquete({ inicial: paquete })}
+                    style={estilos.botonAccion}
+                  >
+                    <Feather name="edit-2" size={18} color={colores.brand.secondary} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Eliminar ${paquete.nombre}`}
+                    onPress={() => preguntarEliminarPaquete(paquete)}
+                    style={estilos.botonAccion}
+                  >
+                    <Feather name="trash-2" size={18} color={colores.funcional.error} />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })
+        )}
       </Modal>
 
       <Modal
@@ -428,6 +573,20 @@ const estilos = StyleSheet.create({
     backgroundColor: colores.bg.subtle,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  filaPaquete: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espaciado.md,
+    paddingVertical: espaciado.sm,
+  },
+  filaPaqueteDividida: {
+    borderTopWidth: 1,
+    borderTopColor: colores.borde.default,
+  },
+  infoPaquete: {
+    flex: 1,
+    gap: espaciado.xs,
   },
   footerFormulario: {
     flexDirection: 'row',

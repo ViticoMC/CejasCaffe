@@ -6,6 +6,7 @@ import type {
   ItemMovimiento,
   MovimientoInventario,
 } from '../../domain/tipos';
+import { actualizarPaquete, obtenerPaquete } from './paquetes';
 
 export interface ItemInventario extends Ingrediente {
   bajo: boolean;
@@ -36,32 +37,74 @@ export async function registrarEntrada(
       throw new Error('Material no encontrado');
     }
 
+    let cantidad = 0;
+    let costoTotal = 0;
+    let paqueteId: number | null = null;
+    let descripcion: string;
+    let nombreEntrada: string;
+
+    if ('paquete_id' in dato) {
+      const paquete = await obtenerPaquete(txn, dato.paquete_id);
+      if (!paquete || paquete.ingrediente_id !== dato.ingrediente_id) {
+        throw new Error('Paquete no encontrado');
+      }
+      if (!Number.isFinite(dato.paquetes) || dato.paquetes <= 0) {
+        throw new Error('La cantidad de paquetes debe ser mayor a 0');
+      }
+      const precioPaquete = dato.precioPaquete ?? paquete.precio;
+      if (precioPaquete !== paquete.precio) {
+        await actualizarPaquete(txn, paquete.id, {
+          nombre: paquete.nombre,
+          cantidad: paquete.cantidad,
+          precio: precioPaquete,
+        });
+      }
+      cantidad = dato.paquetes * paquete.cantidad;
+      costoTotal = dato.paquetes * precioPaquete;
+      paqueteId = paquete.id;
+      nombreEntrada = `Compra de ${dato.paquetes} × ${paquete.nombre}`;
+      descripcion = `${dato.paquetes} × ${paquete.nombre} = ${cantidad} ${ingrediente.unidad.trim()}`;
+    } else {
+      cantidad = dato.cantidad;
+      costoTotal = dato.costoTotal;
+      if (!Number.isFinite(cantidad) || cantidad <= 0) {
+        throw new Error('La cantidad debe ser mayor a 0');
+      }
+      if (!Number.isFinite(costoTotal) || costoTotal <= 0) {
+        throw new Error('El costo debe ser mayor a 0');
+      }
+      nombreEntrada = `Compra de ${ingrediente.nombre}`;
+      descripcion = `Entrada de ${cantidad} ${ingrediente.unidad.trim()} de ${ingrediente.nombre}`;
+    }
+
     const motivo = dato.motivo?.trim() || null;
-    const nombre = motivo ?? `Compra de ${ingrediente.nombre}`;
-    const descripcion = `Entrada de ${dato.cantidad} ${ingrediente.unidad} de ${ingrediente.nombre}`;
+    const nombre = motivo ?? nombreEntrada;
 
     const resultado = await txn.runAsync(
       `INSERT INTO inversiones (nombre, descripcion, precio, ingrediente_id, cantidad)
        VALUES (?, ?, ?, ?, ?)`,
       nombre,
       descripcion,
-      dato.costoTotal,
+      costoTotal,
       dato.ingrediente_id,
-      dato.cantidad
+      cantidad
     );
 
+    // El INSERT del movimiento debe ir antes del UPDATE de stock:
+    // el trigger trg_precio_por_entrada promedia con el stock vigente.
     await txn.runAsync(
-      `INSERT INTO movimientos_inventario (ingrediente_id, tipo, cantidad, motivo, inversion_id)
-       VALUES (?, 'entrada', ?, ?, ?)`,
+      `INSERT INTO movimientos_inventario (ingrediente_id, tipo, cantidad, motivo, inversion_id, paquete_id)
+       VALUES (?, 'entrada', ?, ?, ?, ?)`,
       dato.ingrediente_id,
-      dato.cantidad,
+      cantidad,
       motivo,
-      resultado.lastInsertRowId
+      resultado.lastInsertRowId,
+      paqueteId
     );
 
     await txn.runAsync(
       "UPDATE ingredientes SET stock = stock + ?, actualizado_en = datetime('now') WHERE id = ?",
-      dato.cantidad,
+      cantidad,
       dato.ingrediente_id
     );
   });
@@ -121,10 +164,12 @@ export async function listarMovimientos(
   const parametros = ingredienteId != null ? [ingredienteId] : [];
   return db.getAllAsync<ItemMovimiento>(
     `SELECT m.id, m.ingrediente_id, m.tipo, m.cantidad, m.motivo,
-            m.venta_id, m.inversion_id, m.creado_en,
-            i.nombre AS nombre_ingrediente, i.unidad
+            m.venta_id, m.inversion_id, m.paquete_id, m.creado_en,
+            i.nombre AS nombre_ingrediente, i.unidad,
+            p.nombre AS nombre_paquete
      FROM movimientos_inventario m
      JOIN ingredientes i ON i.id = m.ingrediente_id
+     LEFT JOIN paquetes p ON p.id = m.paquete_id
      ${where}
      ORDER BY m.creado_en DESC, m.id DESC`,
     ...parametros

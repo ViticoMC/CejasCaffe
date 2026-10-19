@@ -148,9 +148,10 @@ export function RespaldoScreen() {
       Alert.alert(
         'Datos restaurados',
         `Se restauraron ${resumen.ventas} ventas, ${resumen.bebidas} bebidas, ` +
-          `${resumen.servicios} servicios, ${resumen.ingredientes} materiales, ` +
-          `${resumen.inversiones} inversiones y ${resumen.movimientos_inventario} ` +
-          `movimientos de almacén desde ${nombre}.`
+          `${resumen.fotos} fotos, ${resumen.servicios} servicios, ` +
+          `${resumen.ingredientes} materiales, ${resumen.paquetes} paquetes, ` +
+          `${resumen.inversiones} inversiones y ` +
+          `${resumen.movimientos_inventario} movimientos de almacén desde ${nombre}.`
       );
     } catch (error) {
       Alert.alert('No se pudo restaurar', mensajeDeError(error));
@@ -319,9 +320,13 @@ export function RespaldoScreen() {
             <Text style={[tipografia.caption, estilos.resumenTitulo]}>Contendrá:</Text>
             <Text style={tipografia.small}>{filaResumen('Ventas', pendiente.resumen.ventas)}</Text>
             <Text style={tipografia.small}>{filaResumen('Bebidas', pendiente.resumen.bebidas)}</Text>
+            <Text style={tipografia.small}>{filaResumen('Fotos', pendiente.resumen.fotos)}</Text>
             <Text style={tipografia.small}>{filaResumen('Servicios', pendiente.resumen.servicios)}</Text>
             <Text style={tipografia.small}>
               {filaResumen('Materiales', pendiente.resumen.ingredientes)}
+            </Text>
+            <Text style={tipografia.small}>
+              {filaResumen('Paquetes', pendiente.resumen.paquetes)}
             </Text>
             <Text style={tipografia.small}>
               {filaResumen('Inversiones', pendiente.resumen.inversiones)}

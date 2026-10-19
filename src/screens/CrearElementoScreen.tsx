@@ -24,7 +24,7 @@ const tipos: TipoElemento[] = [
     clave: 'ingrediente',
     icono: 'sprout',
     nombre: 'Ingrediente',
-    descripcion: 'Producto base con unidad de medida y precio unitario.',
+    descripcion: 'Producto base con unidad de medida y paquetes de compra.',
   },
 ];
 

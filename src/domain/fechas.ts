@@ -1,4 +1,4 @@
-export type TipoPeriodo = 'hoy' | 'semana' | 'mes' | 'todo';
+export type TipoPeriodo = "hoy" | "semana" | "mes" | "todo";
 
 export interface RangoFechas {
   desde: string | undefined;
@@ -6,68 +6,93 @@ export interface RangoFechas {
 }
 
 function dosDigitos(n: number): string {
-  return String(n).padStart(2, '0');
+  return String(n).padStart(2, "0");
 }
 
 function aISOdia(fecha: Date, hora: string): string {
   return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(
-    fecha.getDate()
+    fecha.getDate(),
   )}T${hora}`;
 }
 
 function inicioSemanaLocal(offset: number): Date {
   const hoy = new Date();
   const diffLunes = (hoy.getDay() + 6) % 7;
-  return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - diffLunes + offset * 7);
+  return new Date(
+    hoy.getFullYear(),
+    hoy.getMonth(),
+    hoy.getDate() - diffLunes + offset * 7,
+  );
 }
 
 export function rangoDePeriodo(tipo: TipoPeriodo, offset = 0): RangoFechas {
   const hoy = new Date();
   switch (tipo) {
-    case 'hoy': {
-      const dia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + offset);
-      return { desde: aISOdia(dia, '00:00:00'), hasta: aISOdia(dia, '23:59:59') };
+    case "hoy": {
+      const dia = new Date(
+        hoy.getFullYear(),
+        hoy.getMonth(),
+        hoy.getDate() + offset,
+      );
+      return {
+        desde: aISOdia(dia, "00:00:00"),
+        hasta: aISOdia(dia, "23:59:59"),
+      };
     }
-    case 'semana': {
+    case "semana": {
       const inicio = inicioSemanaLocal(offset);
-      const fin = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + 6);
-      return { desde: aISOdia(inicio, '00:00:00'), hasta: aISOdia(fin, '23:59:59') };
+      const fin = new Date(
+        inicio.getFullYear(),
+        inicio.getMonth(),
+        inicio.getDate() + 6,
+      );
+      return {
+        desde: aISOdia(inicio, "00:00:00"),
+        hasta: aISOdia(fin, "23:59:59"),
+      };
     }
-    case 'mes': {
+    case "mes": {
       const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1);
       const fin = new Date(hoy.getFullYear(), hoy.getMonth() + offset + 1, 0);
-      return { desde: aISOdia(inicio, '00:00:00'), hasta: aISOdia(fin, '23:59:59') };
+      return {
+        desde: aISOdia(inicio, "00:00:00"),
+        hasta: aISOdia(fin, "23:59:59"),
+      };
     }
-    case 'todo':
+    case "todo":
       return { desde: undefined, hasta: undefined };
   }
 }
 
 const MESES = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
 ];
 
 export function fechaDePeriodo(tipo: TipoPeriodo, offset = 0): Date {
   const hoy = new Date();
   switch (tipo) {
-    case 'hoy':
-      return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + offset);
-    case 'semana':
+    case "hoy":
+      return new Date(
+        hoy.getFullYear(),
+        hoy.getMonth(),
+        hoy.getDate() + offset,
+      );
+    case "semana":
       return inicioSemanaLocal(offset);
-    case 'mes':
+    case "mes":
       return new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1);
-    case 'todo':
+    case "todo":
       return new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
   }
 }
@@ -75,31 +100,39 @@ export function fechaDePeriodo(tipo: TipoPeriodo, offset = 0): Date {
 export function tituloDePeriodo(tipo: TipoPeriodo, offset = 0): string {
   const hoy = new Date();
   switch (tipo) {
-    case 'hoy': {
-      const dia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + offset);
+    case "hoy": {
+      const dia = new Date(
+        hoy.getFullYear(),
+        hoy.getMonth(),
+        hoy.getDate() + offset,
+      );
       return `${dia.getDate()} ${MESES[dia.getMonth()]}`;
     }
-    case 'semana': {
+    case "semana": {
       const inicio = inicioSemanaLocal(offset);
-      const fin = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + 6);
+      const fin = new Date(
+        inicio.getFullYear(),
+        inicio.getMonth(),
+        inicio.getDate() + 6,
+      );
       const mismaAnio = inicio.getFullYear() === fin.getFullYear();
       return `Semana del ${inicio.getDate()} ${MESES[inicio.getMonth()]} al ${fin.getDate()} ${
         MESES[fin.getMonth()]
-      }${mismaAnio ? '' : ` ${fin.getFullYear()}`}`;
+      }${mismaAnio ? "" : ` ${fin.getFullYear()}`}`;
     }
-    case 'mes': {
+    case "mes": {
       const inicio = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1);
       return `${MESES[inicio.getMonth()]} ${inicio.getFullYear()}`;
     }
-    case 'todo':
-      return 'Todo el histórico';
+    case "todo":
+      return "Todo el histórico";
   }
 }
 
 export function fechaAVentaISO(fecha: Date): string {
   return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(
-    fecha.getDate()
-  )}T${'00:00:00'}`;
+    fecha.getDate(),
+  )}T${"00:00:00"}`;
 }
 
 export function formatearFechaHora(iso: string): string {
@@ -107,7 +140,5 @@ export function formatearFechaHora(iso: string): string {
   if (Number.isNaN(fecha.getTime())) {
     return iso;
   }
-  return `${fecha.getDate()} ${MESES[fecha.getMonth()]} · ${dosDigitos(fecha.getHours())}:${dosDigitos(
-    fecha.getMinutes()
-  )}`;
+  return `${fecha.getDate()} ${MESES[fecha.getMonth()]}`;
 }

@@ -39,10 +39,9 @@ export async function registrarVenta(
       throw new Error('Bebida no encontrada');
     }
     receta = await obtenerReceta(db, dato.producto.id);
-    const resumen = calcularResumenReceta(receta, bebida.porcentaje_ganancia);
     nombre = bebida.nombre;
-    precioVenta = resumen.precioVenta;
-    costoProduccion = resumen.costoProduccion;
+    precioVenta = bebida.precio_venta;
+    costoProduccion = bebida.costo_produccion;
   }
 
   const conFecha = dato.fecha != null;

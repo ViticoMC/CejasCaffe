@@ -1,7 +1,8 @@
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import { calcularResumenReceta } from '../domain/calculos';
 
 export const DATABASE_NAME = 'misventas.db';
-export const DATABASE_VERSION = 5;
+export const DATABASE_VERSION = 8;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL;');
@@ -154,7 +155,104 @@ ALTER TABLE inversiones ADD COLUMN cantidad REAL;
     currentVersion = 5;
   }
 
+  if (currentVersion === 5) {
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS paquetes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ingrediente_id INTEGER NOT NULL REFERENCES ingredientes(id) ON DELETE CASCADE,
+  nombre TEXT NOT NULL,
+  cantidad REAL NOT NULL CHECK (cantidad > 0),
+  precio REAL NOT NULL CHECK (precio >= 0),
+  creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+  actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_paquetes_ingrediente ON paquetes(ingrediente_id);
+
+ALTER TABLE movimientos_inventario ADD COLUMN paquete_id INTEGER REFERENCES paquetes(id) ON DELETE SET NULL;
+
+CREATE TRIGGER trg_precio_por_entrada
+AFTER INSERT ON movimientos_inventario
+WHEN NEW.tipo = 'entrada' AND NEW.inversion_id IS NOT NULL
+BEGIN
+  UPDATE ingredientes
+  SET precio_unitario = CASE
+    WHEN (stock + NEW.cantidad) > 0 THEN
+      (stock * precio_unitario +
+        (SELECT precio FROM inversiones WHERE id = NEW.inversion_id))
+      / (stock + NEW.cantidad)
+    ELSE precio_unitario
+  END
+  WHERE id = NEW.ingrediente_id;
+END;
+`);
+    currentVersion = 6;
+  }
+
+  if (currentVersion === 6) {
+    await db.execAsync(`
+ALTER TABLE bebidas ADD COLUMN costo_produccion REAL NOT NULL DEFAULT 0;
+ALTER TABLE bebidas ADD COLUMN precio_venta REAL NOT NULL DEFAULT 0;
+
+CREATE TRIGGER IF NOT EXISTS trg_precio_ingrediente_bebidas
+AFTER UPDATE OF precio_unitario ON ingredientes
+WHEN OLD.precio_unitario IS NOT NEW.precio_unitario
+BEGIN
+  UPDATE bebidas
+  SET costo_produccion = (
+    SELECT COALESCE(ROUND(SUM(bi.cantidad * i.precio_unitario), 2), 0)
+    FROM bebida_ingredientes bi
+    JOIN ingredientes i ON i.id = bi.ingrediente_id
+    WHERE bi.bebida_id = bebidas.id
+  ),
+  actualizado_en = datetime('now')
+  WHERE id IN (SELECT bebida_id FROM bebida_ingredientes WHERE ingrediente_id = NEW.id);
+END;
+`);
+    await rellenarPreciosBebidas(db);
+    currentVersion = 7;
+  }
+
+  if (currentVersion === 7) {
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS bebida_fotos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bebida_id INTEGER NOT NULL REFERENCES bebidas(id) ON DELETE CASCADE,
+  archivo TEXT NOT NULL,
+  orden INTEGER NOT NULL DEFAULT 0,
+  ancho INTEGER,
+  alto INTEGER,
+  creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bebida_fotos_bebida ON bebida_fotos(bebida_id);
+`);
+    currentVersion = 8;
+  }
+
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
+}
+
+async function rellenarPreciosBebidas(db: SQLiteDatabase): Promise<void> {
+  const bebidas = await db.getAllAsync<{ id: number; porcentaje_ganancia: number }>(
+    'SELECT id, porcentaje_ganancia FROM bebidas'
+  );
+  for (const bebida of bebidas) {
+    const receta = await db.getAllAsync<{ cantidad: number; precio_unitario: number }>(
+      `SELECT bi.cantidad, i.precio_unitario
+       FROM bebida_ingredientes bi
+       JOIN ingredientes i ON i.id = bi.ingrediente_id
+       WHERE bi.bebida_id = ?`,
+      bebida.id
+    );
+    const resumen = calcularResumenReceta(receta, bebida.porcentaje_ganancia);
+    await db.runAsync(
+      'UPDATE bebidas SET costo_produccion = ?, precio_venta = ? WHERE id = ?',
+      resumen.costoProduccion,
+      resumen.precioVenta,
+      bebida.id
+    );
+  }
 }
 
 export async function openDatabase(): Promise<SQLiteDatabase> {

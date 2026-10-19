@@ -12,10 +12,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { listarBebidas, obtenerReceta } from '../db/repos/bebidas';
+import { listarBebidas } from '../db/repos/bebidas';
 import { listarServicios, obtenerRecetaServicio } from '../db/repos/servicios';
 import { eliminarVenta, listarVentas, registrarVenta } from '../db/repos/ventas';
-import { calcularResumenReceta, type ResumenReceta } from '../domain/calculos';
+import {
+  calcularGananciaPorVenta,
+  calcularResumenReceta,
+  type ResumenReceta,
+} from '../domain/calculos';
 import {
   fechaAVentaISO,
   fechaDePeriodo,
@@ -29,12 +33,12 @@ import { colores, espaciado, radio, sombra } from '../theme/tokens';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { CantidadInput } from '../ui/CantidadInput';
 import { Card } from '../ui/Card';
 import { ChipSelector, type OpcionChip } from '../ui/ChipSelector';
 import { EmptyState } from '../ui/EmptyState';
 import { FechaSelector } from '../ui/FechaSelector';
 import { Modal } from '../ui/Modal';
-import { Stepper } from '../ui/Stepper';
 
 type BebidaConResumen = Bebida & { resumen: ResumenReceta };
 type ServicioConResumen = Servicio & { resumen: ResumenReceta };
@@ -133,15 +137,17 @@ export function VentasScreen() {
         listarServicios(db),
         listarVentas(db, filtro),
       ]);
-      const conResumenBebidas = await Promise.all(
-        bebidasLista.map(async (bebida) => {
-          const receta = await obtenerReceta(db, bebida.id);
-          return {
-            ...bebida,
-            resumen: calcularResumenReceta(receta, bebida.porcentaje_ganancia),
-          };
-        })
-      );
+      const conResumenBebidas = bebidasLista.map((bebida) => ({
+        ...bebida,
+        resumen: {
+          costoProduccion: bebida.costo_produccion,
+          precioVenta: bebida.precio_venta,
+          gananciaPorVenta: calcularGananciaPorVenta(
+            bebida.costo_produccion,
+            bebida.precio_venta
+          ),
+        },
+      }));
       const conResumenServicios = await Promise.all(
         serviciosLista.map(async (servicio) => {
           const receta = await obtenerRecetaServicio(db, servicio.id);
@@ -166,10 +172,14 @@ export function VentasScreen() {
   const resumen = useMemo(() => {
     const totalVentas = ventas.reduce((s, v) => s + v.cantidad * v.precio_unitario, 0);
     const totalProduccion = ventas.reduce((s, v) => s + v.cantidad * v.costo_unitario, 0);
+    const totalBebidas = ventas
+      .filter((v) => v.servicio_id == null)
+      .reduce((s, v) => s + v.cantidad, 0);
     return {
       totalVentas,
       totalProduccion,
       totalGanancia: totalVentas - totalProduccion,
+      totalBebidas,
       numeroVentas: ventas.length,
     };
   }, [ventas]);
@@ -311,12 +321,21 @@ export function VentasScreen() {
         <Card style={estilos.resumenCard}>
           <View style={estilos.filaResumen}>
             <View style={estilos.celdaResumen}>
+              <Text style={tipografia.micro}>Bebidas</Text>
+              <Text style={[estilos.valorResumen, { color: colores.brand.accent }]}>
+                {formatearCantidad(resumen.totalBebidas)}
+              </Text>
+            </View>
+            <View style={estilos.divisorResumen} />
+            <View style={estilos.celdaResumen}>
               <Text style={tipografia.micro}>Ventas</Text>
               <Text style={[estilos.valorResumen, { color: colores.brand.primary }]}>
                 {formatearDinero(resumen.totalVentas)}
               </Text>
             </View>
-            <View style={estilos.divisorResumen} />
+          </View>
+          <View style={estilos.divisorHorizontal} />
+          <View style={estilos.filaResumen}>
             <View style={estilos.celdaResumen}>
               <Text style={tipografia.micro}>Producción</Text>
               <Text style={[estilos.valorResumen, { color: colores.texto.secondary }]}>
@@ -530,11 +549,14 @@ export function VentasScreen() {
                 <Text style={tipografia.small}>Cantidad vendida</Text>
                 <Text style={tipografia.micro}>Unidades de este producto</Text>
               </View>
-              <Stepper
-                valor={cantidadVenta}
-                onChange={setCantidadVenta}
-                minimo={1}
-              />
+              <View style={{ flexShrink: 1, minWidth: 0 }}>
+                <CantidadInput
+                  valor={cantidadVenta}
+                  onChange={setCantidadVenta}
+                  minimo={1}
+                  entero
+                />
+              </View>
             </View>
             <FechaSelector valor={fechaVenta} onChange={setFechaVenta} />
             <Pressable
@@ -651,6 +673,10 @@ const estilos = StyleSheet.create({
   divisorResumen: {
     width: 1,
     height: 36,
+    backgroundColor: colores.borde.default,
+  },
+  divisorHorizontal: {
+    height: 1,
     backgroundColor: colores.borde.default,
   },
   valorResumen: {
@@ -781,9 +807,13 @@ const estilos = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: espaciado.sm,
+    flexShrink: 1,
+    minWidth: 0,
   },
   infoCantidad: {
     gap: espaciado.xs,
+    flexShrink: 1,
   },
   cambiarProducto: {
     flexDirection: 'row',

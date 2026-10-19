@@ -6,11 +6,12 @@ import { Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold } from '@expo-g
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SQLiteProvider } from 'expo-sqlite';
+import { SQLiteProvider, type SQLiteDatabase } from 'expo-sqlite';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ProveedorRecarga, useRecarga } from '../context/recarga';
 import { DATABASE_NAME, migrateDbIfNeeded } from '../db/database';
+import { reiniciarDbSiSePidio } from '../db/devReset';
 import { colores } from '../theme/tokens';
 import { NavBar } from '../ui/NavBar';
 
@@ -34,11 +35,16 @@ export default function Layout() {
   );
 }
 
+async function inicializarDb(db: SQLiteDatabase) {
+  await reiniciarDbSiSePidio(db);
+  await migrateDbIfNeeded(db);
+}
+
 function CuerpoApp() {
   const { clave } = useRecarga();
   return (
     <SafeAreaProvider key={clave}>
-      <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
+      <SQLiteProvider databaseName={DATABASE_NAME} onInit={inicializarDb}>
         <StatusBar style="dark" />
         <View style={estilos.shell}>
           <Stack

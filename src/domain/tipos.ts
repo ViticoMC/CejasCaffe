@@ -12,8 +12,23 @@ export interface Ingrediente {
 export interface NuevoIngrediente {
   nombre: string;
   unidad: string;
-  precio_unitario: number;
   stock_minimo?: number;
+}
+
+export interface Paquete {
+  id: number;
+  ingrediente_id: number;
+  nombre: string;
+  cantidad: number;
+  precio: number;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface NuevoPaquete {
+  nombre: string;
+  cantidad: number;
+  precio: number;
 }
 
 export type TipoMovimiento = 'entrada' | 'salida' | 'ajuste';
@@ -26,20 +41,33 @@ export interface MovimientoInventario {
   motivo: string | null;
   venta_id: number | null;
   inversion_id: number | null;
+  paquete_id: number | null;
   creado_en: string;
 }
 
 export interface ItemMovimiento extends MovimientoInventario {
   nombre_ingrediente: string;
   unidad: string;
+  nombre_paquete: string | null;
 }
 
-export interface EntradaInventario {
+interface EntradaBase {
   ingrediente_id: number;
-  cantidad: number;
-  costoTotal: number;
   motivo?: string | null;
 }
+
+export interface EntradaPorPaquete extends EntradaBase {
+  paquete_id: number;
+  paquetes: number;
+  precioPaquete?: number;
+}
+
+export interface EntradaPorCantidad extends EntradaBase {
+  cantidad: number;
+  costoTotal: number;
+}
+
+export type EntradaInventario = EntradaPorPaquete | EntradaPorCantidad;
 
 export interface AjusteInventario {
   ingrediente_id: number;
@@ -52,6 +80,8 @@ export interface Bebida {
   nombre: string;
   descripcion: string | null;
   porcentaje_ganancia: number;
+  costo_produccion: number;
+  precio_venta: number;
   activo: boolean;
   creado_en: string;
   actualizado_en: string;
@@ -62,6 +92,34 @@ export interface BebidaIngrediente {
   bebida_id: number;
   ingrediente_id: number;
   cantidad: number;
+}
+
+export interface BebidaFoto {
+  id: number;
+  bebida_id: number;
+  archivo: string;
+  orden: number;
+  ancho: number | null;
+  alto: number | null;
+  creado_en: string;
+}
+
+export interface FotoEntrada {
+  archivo: string;
+  ancho: number | null;
+  alto: number | null;
+}
+
+export interface FotoEnFormulario {
+  id: number | null;
+  archivo: string;
+  ancho: number | null;
+  alto: number | null;
+}
+
+export interface EstadoFotosFormulario {
+  fotos: FotoEnFormulario[];
+  eliminadosIds: number[];
 }
 
 export interface ItemReceta {
@@ -84,6 +142,7 @@ export interface NuevaBebida {
   descripcion?: string | null;
   porcentaje_ganancia: number;
   receta: RecetaDato[];
+  activo?: boolean;
 }
 
 export interface Servicio {

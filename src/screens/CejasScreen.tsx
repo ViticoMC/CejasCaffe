@@ -344,12 +344,14 @@ function FormularioServicio({ visible, inicial, onGuardar, onCancelar }: Formula
                   </Pressable>
                 </View>
                 <View style={estilos.filaStepper}>
-                  <Text style={tipografia.micro}>Cantidad</Text>
-                  <CantidadInput
-                    valor={linea.cantidad}
-                    unidad={linea.unidad}
-                    onChange={(cantidad) => cambiarCantidad(linea.ingrediente_id, cantidad)}
-                  />
+                  <Text style={[tipografia.micro, estilos.etiquetaCantidad]}>Cantidad</Text>
+                  <View style={{ flexShrink: 1, minWidth: 0 }}>
+                    <CantidadInput
+                      valor={linea.cantidad}
+                      unidad={linea.unidad}
+                      onChange={(cantidad) => cambiarCantidad(linea.ingrediente_id, cantidad)}
+                    />
+                  </View>
                 </View>
               </View>
             ))}
@@ -705,6 +707,12 @@ const estilos = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: espaciado.xs,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  etiquetaCantidad: {
+    flexShrink: 0,
   },
   errorReceta: {
     color: colores.funcional.error,

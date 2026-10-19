@@ -7,6 +7,14 @@ export function redondearDinero(valor: number): number {
   return Math.round((valor + Number.EPSILON) * 100) / 100;
 }
 
+export function precioUnitarioDePaquete(paquete: {
+  cantidad: number;
+  precio: number;
+}): number {
+  if (paquete.cantidad <= 0) return 0;
+  return paquete.precio / paquete.cantidad;
+}
+
 export function calcularCostoProduccion(receta: CostoRecetaItem[]): number {
   return redondearDinero(
     receta.reduce((total, item) => total + item.cantidad * item.precio_unitario, 0)
