@@ -5,11 +5,13 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import QRCode from 'react-native-qrcode-svg';
 import { colores, espaciado, radio } from '../theme/tokens';
 import { tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { Modal } from '../ui/Modal';
 import {
   PUERTO_PREDETERMINADO,
   detenerServidor,
@@ -27,11 +29,16 @@ export function ServidorScreen() {
   const [activo, setActivo] = useState(servidorActivo());
   const [url, setUrl] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [qrVisible, setQrVisible] = useState(false);
 
   const refrescar = useCallback(async () => {
     const encendido = servidorActivo();
     setActivo(encendido);
-    setUrl(encendido ? await urlLan() : null);
+    const nuevaUrl = encendido ? await urlLan() : null;
+    setUrl(nuevaUrl);
+    if (nuevaUrl == null) {
+      setQrVisible(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -67,6 +74,7 @@ export function ServidorScreen() {
     detenerServidor();
     setActivo(false);
     setUrl(null);
+    setQrVisible(false);
   };
 
   const copiar = async () => {
@@ -121,6 +129,28 @@ export function ServidorScreen() {
                   Conéctate a una red WiFi para obtener una dirección de red local.
                 </Text>
               )}
+              {url != null && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Ampliar código QR"
+                  onPress={() => setQrVisible(true)}
+                  style={estilos.qr}
+                >
+                  <View style={estilos.qrMarco}>
+                    <QRCode
+                      value={url}
+                      size={170}
+                      color={colores.brand.primary}
+                      backgroundColor={colores.bg.surface}
+                      quietZone={8}
+                    />
+                    <Text style={[tipografia.caption, estilos.qrTexto]}>
+                      Escanea para abrir el menú
+                    </Text>
+                    <Text style={[tipografia.micro, estilos.qrTexto]}>Toca para ampliar</Text>
+                  </View>
+                </Pressable>
+              )}
             </View>
           )}
 
@@ -164,6 +194,36 @@ export function ServidorScreen() {
           </View>
         </Card>
       </ScrollView>
+
+      <Modal
+        visible={qrVisible}
+        titulo="Código QR"
+        subtitulo={url ?? undefined}
+        onClose={() => setQrVisible(false)}
+        footer={
+          <Button
+            label="Cerrar"
+            variant="secondary"
+            onPress={() => setQrVisible(false)}
+            style={estilos.botonModal}
+          />
+        }
+      >
+        {url != null && (
+          <View style={estilos.qrModal}>
+            <QRCode
+              value={url}
+              size={240}
+              color={colores.brand.primary}
+              backgroundColor={colores.bg.surface}
+              quietZone={12}
+            />
+          </View>
+        )}
+        <Text style={[tipografia.small, estilos.qrModalTexto]}>
+          Apunta la cámara de otro teléfono al código.
+        </Text>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -229,6 +289,36 @@ const estilos = StyleSheet.create({
     fontFamily: 'Outfit_500Medium',
     fontSize: 15,
     color: colores.brand.primary,
+  },
+  qr: {
+    alignItems: 'center',
+    marginTop: espaciado.xs,
+  },
+  qrMarco: {
+    alignItems: 'center',
+    gap: espaciado.sm,
+    backgroundColor: colores.bg.surface,
+    borderRadius: radio.md,
+    borderWidth: 1,
+    borderColor: colores.borde.default,
+    padding: espaciado.lg,
+  },
+  qrTexto: {
+    textAlign: 'center',
+  },
+  qrModal: {
+    alignItems: 'center',
+    backgroundColor: colores.bg.surface,
+    borderRadius: radio.md,
+    borderWidth: 1,
+    borderColor: colores.borde.default,
+    padding: espaciado.md,
+  },
+  qrModalTexto: {
+    textAlign: 'center',
+  },
+  botonModal: {
+    flex: 1,
   },
   nota: {
     backgroundColor: colores.bg.surfaceElevated,
