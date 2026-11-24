@@ -304,7 +304,6 @@ export interface LineaPedido {
   cantidad: number;
   entregado: boolean;
   creado_en?: string;
-  notificado?: boolean;
   // ID temporal para distinguir líneas duplicadas en el mismo pedido
   _tempId?: number;
 }

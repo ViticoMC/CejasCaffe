@@ -34,7 +34,6 @@
       "expo-sqlite",
       "expo-font",
       "expo-router",
-      "expo-notifications",
       [
         "expo-image-picker",
         {

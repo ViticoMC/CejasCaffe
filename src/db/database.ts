@@ -293,12 +293,8 @@ CREATE INDEX IF NOT EXISTS idx_pagos_trabajador_fecha ON pagos_trabajador(creado
   if (currentVersion === 12) {
     const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(pedidos_mesa)');
     const hasCreadoEn = columns.some((c) => c.name === 'creado_en');
-    const hasNotificado = columns.some((c) => c.name === 'notificado');
     if (!hasCreadoEn) {
       await db.execAsync('ALTER TABLE pedidos_mesa ADD COLUMN creado_en TEXT;');
-    }
-    if (!hasNotificado) {
-      await db.execAsync('ALTER TABLE pedidos_mesa ADD COLUMN notificado INTEGER NOT NULL DEFAULT 0;');
     }
     currentVersion = 13;
   }

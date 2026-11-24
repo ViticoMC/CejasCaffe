@@ -53,8 +53,7 @@ export async function cargarPedidoMesa(db: SQLiteDatabase, mesaId: number): Prom
     cantidad: number;
     entregado: number;
     creado_en: string | null;
-    notificado: number;
-  }>('SELECT bebida_id, bebida_nombre, bebida_precio, bebida_costo, cantidad, entregado, creado_en, notificado FROM pedidos_mesa WHERE mesa_id = ? ORDER BY id', mesaId);
+  }>('SELECT bebida_id, bebida_nombre, bebida_precio, bebida_costo, cantidad, entregado, creado_en FROM pedidos_mesa WHERE mesa_id = ? ORDER BY id', mesaId);
   return rows.map((r) => ({
     bebida_id: r.bebida_id,
     bebida_nombre: r.bebida_nombre,
@@ -63,7 +62,6 @@ export async function cargarPedidoMesa(db: SQLiteDatabase, mesaId: number): Prom
     cantidad: r.cantidad,
     entregado: r.entregado === 1,
     creado_en: r.creado_en ?? '',
-    notificado: r.notificado === 1,
   }));
 }
 
@@ -143,51 +141,4 @@ export async function obtenerMesasConPedidosYTiempo(db: SQLiteDatabase): Promise
     'SELECT DISTINCT mesa_id, MIN(creado_en) AS creado_en FROM pedidos_mesa WHERE creado_en IS NOT NULL AND creado_en != \'\' GROUP BY mesa_id'
   );
   return rows;
-}
-
-// ---------------------------------------------------------------------------
-// Pedidos vencidos (para notificaciones)
-// ---------------------------------------------------------------------------
-
-export interface MesaPedidoVencido {
-  mesa_id: number;
-  mesa_nombre: string;
-  creado_en: string;
-  notificado: number;
-}
-
-export async function obtenerMesasConPedidosVencidos(
-  db: SQLiteDatabase,
-  minutos: number
-): Promise<MesaPedidoVencido[]> {
-  const tables = await db.getAllAsync<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_mesa'"
-  );
-  if (tables.length === 0) {
-    return [];
-  }
-
-  const rows = await db.getAllAsync<MesaPedidoVencido>(`
-    SELECT DISTINCT pm.mesa_id, m.nombre AS mesa_nombre, pm.creado_en, pm.notificado
-    FROM pedidos_mesa pm
-    JOIN mesas m ON m.id = pm.mesa_id
-    WHERE pm.creado_en IS NOT NULL
-      AND pm.creado_en != ''
-      AND pm.notificado = 0
-      AND (julianday('now') - julianday(pm.creado_en)) * 24 * 60 > ?
-    ORDER BY pm.creado_en ASC
-  `,
-  minutos
-  );
-  return rows;
-}
-
-export async function marcarPedidoNotificado(db: SQLiteDatabase, mesaId: number): Promise<void> {
-  const tables = await db.getAllAsync<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_mesa'"
-  );
-  if (tables.length === 0) {
-    return;
-  }
-  await db.runAsync('UPDATE pedidos_mesa SET notificado = 1 WHERE mesa_id = ?', mesaId);
 }
