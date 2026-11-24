@@ -7,6 +7,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { colores, espaciado, radio } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -26,6 +27,7 @@ const ESPERA_ARRANQUE_MS = 400;
 export function ServidorScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
+  const paddingBottom = useBottomSafe();
   const [activo, setActivo] = useState(servidorActivo());
   const [url, setUrl] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -95,7 +97,7 @@ export function ServidorScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={estilos.contenido} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[estilos.contenido, { paddingBottom }]} showsVerticalScrollIndicator={false}>
         <Card style={estilos.card}>
           <View style={estilos.filaEstado}>
             <View style={estilos.infoEstado}>
@@ -248,7 +250,6 @@ const estilos = StyleSheet.create({
   contenido: {
     paddingHorizontal: espaciado['2xl'],
     paddingTop: espaciado.sm,
-    paddingBottom: 200,
     gap: espaciado.lg,
   },
   card: {

@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 
@@ -30,6 +31,7 @@ const tipos: TipoElemento[] = [
 
 export function CrearElementoScreen() {
   const router = useRouter();
+  const paddingBottom = useBottomSafe();
   return (
     <SafeAreaView style={estilos.safe}>
       <View style={estilos.encabezado}>
@@ -68,7 +70,7 @@ export function CrearElementoScreen() {
         ))}
       </View>
 
-      <Text style={[tipografia.micro, estilos.nota]}>
+      <Text style={[tipografia.micro, estilos.nota, { paddingBottom }]}>
         En esta fase construimos la bienvenida. Las fichas de bebidas e
         ingredientes llegan en los próximos pasos.
       </Text>
@@ -137,7 +139,6 @@ const estilos = StyleSheet.create({
   },
   nota: {
     paddingHorizontal: espaciado['2xl'],
-    paddingBottom: 80,
     textAlign: 'center',
   },
 });

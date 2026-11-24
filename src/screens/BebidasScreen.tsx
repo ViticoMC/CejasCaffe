@@ -46,6 +46,7 @@ import type {
 import { eliminarArchivos, uriDe } from '../fotos/almacen';
 import { elegirFotos } from '../fotos/seleccionar';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -141,6 +142,7 @@ function FormularioBebida({ visible, inicial, onGuardar, onCancelar }: Formulari
   const { height } = useWindowDimensions();
   const [nombre, setNombre] = useState(inicial?.nombre ?? '');
   const [descripcion, setDescripcion] = useState(inicial?.descripcion ?? '');
+  const [ingredientesMenu, setIngredientesMenu] = useState(inicial?.ingredientes_menu ?? '');
   const [porcentaje, setPorcentaje] = useState(
     inicial != null ? String(inicial.porcentaje_ganancia) : '40'
   );
@@ -310,13 +312,14 @@ function FormularioBebida({ visible, inicial, onGuardar, onCancelar }: Formulari
           nombre: nombre.trim(),
           descripcion: descripcion.trim().length > 0 ? descripcion.trim() : null,
           porcentaje_ganancia: porcentajeNumero,
+          ingredientes_menu: ingredientesMenu.trim().length > 0 ? ingredientesMenu.trim() : null,
           receta: lineas.map((l) => ({ ingrediente_id: l.ingrediente_id, cantidad: l.cantidad })),
           activo,
         },
         { fotos, eliminadosIds }
       );
-    } catch {
-      Alert.alert('No se pudo guardar', 'Revisa los datos e inténtalo de nuevo.');
+    } catch (e: any) {
+      Alert.alert('No se pudo guardar', e?.message ?? 'Revisa los datos e inténtalo de nuevo.');
     } finally {
       setGuardando(false);
     }
@@ -366,6 +369,12 @@ function FormularioBebida({ visible, inicial, onGuardar, onCancelar }: Formulari
           value={descripcion}
           onChangeText={setDescripcion}
           placeholder="Opcional"
+        />
+        <Input
+          label="Ingredientes del menú"
+          value={ingredientesMenu}
+          onChangeText={setIngredientesMenu}
+          placeholder="Separados por coma, ej: Café, Leche, Azúcar"
         />
         <Input
           label="Porcentaje de ganancia"
@@ -499,6 +508,7 @@ function FormularioBebida({ visible, inicial, onGuardar, onCancelar }: Formulari
 
 export function BebidasScreen() {
   const db = useSQLiteContext();
+  const paddingBottom = useBottomSafe();
   const [bebidas, setBebidas] = useState<BebidaEnLista[]>([]);
   const [cargando, setCargando] = useState(true);
   const [formularioAbierto, setFormularioAbierto] = useState(false);
@@ -681,7 +691,7 @@ export function BebidasScreen() {
           data={bebidas}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
-          contentContainerStyle={estilos.lista}
+          contentContainerStyle={[estilos.lista, { paddingBottom }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -767,7 +777,6 @@ const estilos = StyleSheet.create({
   },
   lista: {
     paddingHorizontal: espaciado['2xl'],
-    paddingBottom: 200,
     gap: espaciado.lg,
   },
   card: {

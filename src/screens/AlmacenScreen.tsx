@@ -28,6 +28,7 @@ import type {
   TipoMovimiento,
 } from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -78,6 +79,7 @@ function formatearCantidad(valor: number): string {
 export function AlmacenScreen() {
   const db = useSQLiteContext();
   const { height } = useWindowDimensions();
+  const paddingBottom = useBottomSafe();
   const [inventario, setInventario] = useState<ItemInventario[]>([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState<FiltroAlmacen>('todos');
@@ -455,7 +457,7 @@ export function AlmacenScreen() {
           data={lista}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
-          contentContainerStyle={estilos.lista}
+          contentContainerStyle={[estilos.lista, { paddingBottom }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -824,7 +826,6 @@ const estilos = StyleSheet.create({
   },
   lista: {
     paddingHorizontal: espaciado['2xl'],
-    paddingBottom: 200,
     gap: espaciado.lg,
   },
   card: {

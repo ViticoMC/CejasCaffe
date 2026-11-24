@@ -19,6 +19,7 @@ import {
 import { listarVentas } from '../db/repos/ventas';
 import type { Inversion, NuevaInversion } from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -122,6 +123,7 @@ function FormularioInversion({ inicial, onGuardar, onCancelar }: FormularioProps
 
 export function InversionesScreen() {
   const db = useSQLiteContext();
+  const paddingBottom = useBottomSafe();
   const [inversiones, setInversiones] = useState<Inversion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [formularioAbierto, setFormularioAbierto] = useState(false);
@@ -300,7 +302,7 @@ export function InversionesScreen() {
           data={inversiones}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
-          contentContainerStyle={estilos.lista}
+          contentContainerStyle={[estilos.lista, { paddingBottom }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -433,7 +435,6 @@ const estilos = StyleSheet.create({
   },
   lista: {
     paddingHorizontal: espaciado['2xl'],
-    paddingBottom: 200,
     gap: espaciado.lg,
   },
   card: {

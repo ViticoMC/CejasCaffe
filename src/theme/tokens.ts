@@ -44,6 +44,9 @@ export const espaciado = {
   '6xl': 64,
 } as const;
 
+// Altura fija de la barra de navegación (sin safe area)
+export const ALTO_NAV = 56;
+
 export const radio = {
   sm: 8,
   md: 12,

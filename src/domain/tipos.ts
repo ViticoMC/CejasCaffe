@@ -82,6 +82,7 @@ export interface Bebida {
   porcentaje_ganancia: number;
   costo_produccion: number;
   precio_venta: number;
+  ingredientes_menu: string | null;
   activo: boolean;
   creado_en: string;
   actualizado_en: string;
@@ -141,6 +142,7 @@ export interface NuevaBebida {
   nombre: string;
   descripcion?: string | null;
   porcentaje_ganancia: number;
+  ingredientes_menu?: string | null;
   receta: RecetaDato[];
   activo?: boolean;
 }
@@ -226,6 +228,46 @@ export interface ResumenVentas {
   numeroVentas: number;
 }
 
+// --- Estadísticas ---
+
+export type GranularidadTendencia = 'hora' | 'dia' | 'semana' | 'mes';
+
+export interface EstadisticaProducto {
+  clave: string;
+  nombre: string;
+  tipo: TipoProducto;
+  cantidadVendida: number;
+  ingresos: number;
+  ganancia: number;
+}
+
+export interface PuntoTendencia {
+  fecha: string;
+  ventas: number;
+  ganancia: number;
+  cantidad: number;
+}
+
+export interface DistribucionGanancia {
+  costoTotal: number;
+  gananciaTotal: number;
+}
+
+export interface ResumenEstadisticas {
+  ingresos: number;
+  costo: number;
+  ganancia: number;
+  gananciaNeta: number;
+  margen: number;
+  margenNeto: number;
+  unidades: number;
+  numeroVentas: number;
+  ticketPromedio: number;
+  diasConVentas: number;
+  salariosProduccion: number;
+  salariosPropina: number;
+}
+
 export interface Inversion {
   id: number;
   nombre: string;
@@ -243,4 +285,70 @@ export interface NuevaInversion {
   precio: number;
   ingrediente_id?: number | null;
   cantidad?: number | null;
+}
+
+// --- Mesas y Pedidos ---
+
+export interface Mesa {
+  id: number;
+  nombre: string;
+  creado_en: string;
+}
+
+export interface LineaPedido {
+  id?: number;
+  bebida_id: number;
+  bebida_nombre: string;
+  bebida_precio: number;
+  bebida_costo: number;
+  cantidad: number;
+  entregado: boolean;
+  creado_en?: string;
+  notificado?: boolean;
+  // ID temporal para distinguir líneas duplicadas en el mismo pedido
+  _tempId?: number;
+}
+
+export interface PedidoFinalizado {
+  mesaNombre: string;
+  lineas: LineaPedido[];
+  total: number;
+  totalCosto: number;
+  ganancia: number;
+  fecha: string;
+}
+
+// --- Trabajadores ---
+
+export interface Trabajador {
+  id: number;
+  nombre: string;
+  creado_en: string;
+}
+
+export interface NuevoTrabajador {
+  nombre: string;
+}
+
+export type TipoPagoTrabajador = 'produccion' | 'propina';
+
+export interface PagoTrabajador {
+  id: number;
+  trabajador_id: number;
+  tipo: TipoPagoTrabajador;
+  monto: number;
+  creado_en: string;
+}
+
+export interface NuevoPagoTrabajador {
+  trabajador_id: number;
+  tipo: TipoPagoTrabajador;
+  monto: number;
+  fecha?: string;
+}
+
+export interface TotalesTrabajador {
+  produccion: number;
+  propina: number;
+  total: number;
 }

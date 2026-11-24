@@ -26,6 +26,7 @@ import {
 import { restaurarRespaldo, resumenDeContenido, type ResumenRestauracion } from '../db/respaldos';
 import { formatearFechaHora } from '../domain/fechas';
 import { colores, espaciado, radio } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { tipografia } from '../theme/typography';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -44,6 +45,7 @@ function filaResumen(etiqueta: string, valor: number): string {
 
 export function RespaldoScreen() {
   const db = useSQLiteContext();
+  const paddingBottom = useBottomSafe();
   const { recargar } = useRecarga();
   const [respaldos, setRespaldos] = useState<RespaldoGuardado[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -270,7 +272,7 @@ export function RespaldoScreen() {
           data={respaldos}
           keyExtractor={(item) => item.uri}
           renderItem={renderItem}
-          contentContainerStyle={estilos.lista}
+          contentContainerStyle={[estilos.lista, { paddingBottom }]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             respaldos.length > 0 ? (
@@ -378,7 +380,6 @@ const estilos = StyleSheet.create({
   },
   lista: {
     paddingHorizontal: espaciado['2xl'],
-    paddingBottom: 200,
     gap: espaciado.lg,
   },
   seccion: {

@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colores, espaciado, radio, sombra } from '../theme/tokens';
+import { ALTO_NAV, colores, espaciado, radio, sombra } from '../theme/tokens';
 import { fuentes } from '../theme/typography';
 // import { IconoCeja } from './IconoCeja';
 
@@ -12,8 +12,10 @@ export type DestinoNav =
   | 'ingredientes'
   | 'cejas'
   | 'ventas'
+  | 'mesas'
   | 'inversiones'
   | 'almacen'
+  | 'trabajadores'
   | 'respaldos';
 
 export interface ItemNav {
@@ -26,6 +28,7 @@ export interface ItemNav {
 
 export const DESTINOS_NAV: ItemNav[] = [
   { clave: 'menu', ruta: '/menu', etiqueta: 'Menú', icono: 'qrcode' },
+  { clave: 'mesas', ruta: '/mesas', etiqueta: 'Mesas', icono: 'table-chair' },
   { clave: 'bebidas', ruta: '/bebidas', etiqueta: 'Bebidas', icono: 'coffee-outline' },
   { clave: 'ingredientes', ruta: '/ingredientes', etiqueta: 'Materiales', icono: 'sprout' },
   // Pestaña "Cejas" oculta temporalmente de la interfaz. La lógica (ruta y
@@ -40,10 +43,9 @@ export const DESTINOS_NAV: ItemNav[] = [
   { clave: 'ventas', ruta: '/ventas', etiqueta: 'Ventas', icono: 'cash-multiple' },
   { clave: 'inversiones', ruta: '/inversiones', etiqueta: 'Inversiones', icono: 'chart-donut' },
   { clave: 'almacen', ruta: '/almacen', etiqueta: 'Almacén', icono: 'warehouse' },
+  { clave: 'trabajadores', ruta: '/trabajadores', etiqueta: 'Trabajadores', icono: 'account-multiple' },
   { clave: 'respaldos', ruta: '/respaldos', etiqueta: 'Respaldos', icono: 'backup-restore' },
 ];
-
-const ALTO_NAV = 56;
 
 export function NavBar() {
   const insets = useSafeAreaInsets();

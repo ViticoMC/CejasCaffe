@@ -63,5 +63,8 @@ export const tipografia = StyleSheet.create({
 
 export function formatearDinero(valor: number): string {
   const redondeado = Math.round((valor + Number.EPSILON) * 100) / 100;
-  return `$${redondeado.toLocaleString('es-MX', { maximumFractionDigits: 2 })}`;
+  const signo = redondeado < 0 ? '-' : '';
+  return `${signo}$${Math.abs(redondeado).toLocaleString('es-MX', {
+    maximumFractionDigits: 2,
+  })}`;
 }

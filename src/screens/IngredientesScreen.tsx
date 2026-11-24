@@ -27,6 +27,7 @@ import {
 import { precioUnitarioDePaquete } from '../domain/calculos';
 import type { Ingrediente, NuevoIngrediente, NuevoPaquete, Paquete } from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -132,6 +133,7 @@ function FormularioIngrediente({ inicial, onGuardar, onCancelar }: FormularioPro
 
 export function IngredientesScreen() {
   const db = useSQLiteContext();
+  const paddingBottom = useBottomSafe();
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [formularioAbierto, setFormularioAbierto] = useState(false);
@@ -142,6 +144,9 @@ export function IngredientesScreen() {
   const [paquetes, setPaquetes] = useState<Paquete[]>([]);
   const [cargandoPaquetes, setCargandoPaquetes] = useState(false);
   const [formPaquete, setFormPaquete] = useState<{ inicial: Paquete | null } | null>(null);
+  const [estimadoAbierto, setEstimadoAbierto] = useState<Ingrediente | null>(null);
+  const [paquetesEstimado, setPaquetesEstimado] = useState<Paquete[]>([]);
+  const [cargandoEstimado, setCargandoEstimado] = useState(false);
 
   const recargar = useCallback(async () => {
     setCargando(true);
@@ -240,6 +245,21 @@ export function IngredientesScreen() {
     );
   };
 
+  const abrirEstimado = async (ingrediente: Ingrediente) => {
+    setEstimadoAbierto(ingrediente);
+    setCargandoEstimado(true);
+    try {
+      setPaquetesEstimado(await listarPaquetes(db, ingrediente.id));
+    } finally {
+      setCargandoEstimado(false);
+    }
+  };
+
+  const cerrarEstimado = () => {
+    setEstimadoAbierto(null);
+    setPaquetesEstimado([]);
+  };
+
   const renderItem = ({ item }: { item: Ingrediente }) => (
     <Card style={estilos.card}>
       <View style={estilos.filaSuperior}>
@@ -252,9 +272,19 @@ export function IngredientesScreen() {
         <PriceTag precio={item.precio_unitario} />
       </View>
       <View style={estilos.filaAcciones}>
-        <Text style={tipografia.micro}>
-          Stock {formatearCantidad(item.stock)} {item.unidad.trim()}
-        </Text>
+        <View style={estilos.stockGrupo}>
+          <Text style={tipografia.micro}>
+            Stock {formatearCantidad(item.stock)} {item.unidad.trim()}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Ver estimado por paquete de ${item.nombre}`}
+            onPress={() => void abrirEstimado(item)}
+            style={estilos.botonEstimado}
+          >
+            <Feather name="chevron-down" size={14} color={colores.brand.secondary} />
+          </Pressable>
+        </View>
         <View style={estilos.botonesAccion}>
           <Pressable
             accessibilityRole="button"
@@ -315,7 +345,7 @@ export function IngredientesScreen() {
           data={ingredientes}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
-          contentContainerStyle={estilos.lista}
+          contentContainerStyle={[estilos.lista, { paddingBottom }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -444,6 +474,58 @@ export function IngredientesScreen() {
       </Modal>
 
       <Modal
+        visible={estimadoAbierto != null}
+        titulo="Estimado por paquete"
+        subtitulo={estimadoAbierto?.nombre}
+        onClose={cerrarEstimado}
+      >
+        {cargandoEstimado ? (
+          <ActivityIndicator color={colores.brand.secondary} size="large" />
+        ) : paquetesEstimado.length === 0 ? (
+          <EmptyState
+            titulo="Sin paquetes definidos"
+            texto="Agrega paquetes a este material para ver el estimado de cuántos caben en el stock actual."
+          />
+        ) : (
+          paquetesEstimado.map((paquete, indice) => {
+            const unidad = (estimadoAbierto?.unidad ?? '').trim();
+            const estimado =
+              paquete.cantidad > 0
+                ? estimadoAbierto!.stock / paquete.cantidad
+                : 0;
+            return (
+              <View
+                key={paquete.id}
+                style={[estilos.filaEstimado, indice > 0 && estilos.filaEstimadoDividida]}
+              >
+                <View style={estilos.infoEstimado}>
+                  <Text style={tipografia.small} numberOfLines={1}>
+                    {paquete.nombre}
+                  </Text>
+                  <Text style={tipografia.micro}>
+                    {formatearCantidad(paquete.cantidad)} {unidad} por paquete
+                  </Text>
+                </View>
+                <View style={estilos.estimadoValor}>
+                  <Text style={tipografia.headline}>
+                    {estimado.toLocaleString('es-MX', {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Text>
+                  <Text style={tipografia.micro}>
+                    {estimado >= 1
+                      ? `${Math.floor(estimado)} ${Math.floor(estimado) === 1 ? 'paquete completo' : 'paquetes completos'}`
+                      : 'menos de 1 paquete'}
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </Modal>
+
+      <Modal
         visible={eliminando != null}
         titulo={
           usoEliminando.bebidas > 0 || usoEliminando.servicios > 0
@@ -538,7 +620,6 @@ const estilos = StyleSheet.create({
   },
   lista: {
     paddingHorizontal: espaciado['2xl'],
-    paddingBottom: 200,
     gap: espaciado.lg,
   },
   card: {
@@ -561,6 +642,38 @@ const estilos = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colores.borde.default,
     paddingTop: espaciado.md,
+  },
+  stockGrupo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espaciado.xs,
+  },
+  botonEstimado: {
+    width: 24,
+    height: 24,
+    borderRadius: radio.sm,
+    backgroundColor: colores.bg.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filaEstimado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: espaciado.md,
+    paddingVertical: espaciado.sm,
+  },
+  filaEstimadoDividida: {
+    borderTopWidth: 1,
+    borderTopColor: colores.borde.default,
+  },
+  infoEstimado: {
+    flex: 1,
+    gap: espaciado.xs,
+  },
+  estimadoValor: {
+    alignItems: 'flex-end',
+    gap: espaciado.xs,
   },
   botonesAccion: {
     flexDirection: 'row',

@@ -2,7 +2,7 @@ import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { calcularResumenReceta } from '../domain/calculos';
 
 export const DATABASE_NAME = 'misventas.db';
-export const DATABASE_VERSION = 8;
+export const DATABASE_VERSION = 14;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL;');
@@ -228,6 +228,96 @@ CREATE TABLE IF NOT EXISTS bebida_fotos (
 CREATE INDEX IF NOT EXISTS idx_bebida_fotos_bebida ON bebida_fotos(bebida_id);
 `);
     currentVersion = 8;
+  }
+
+  if (currentVersion === 8) {
+    const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(bebidas)');
+    const hasColumn = columns.some((c) => c.name === 'ingredientes_menu');
+    if (!hasColumn) {
+      await db.execAsync(`ALTER TABLE bebidas ADD COLUMN ingredientes_menu TEXT;`);
+    }
+    currentVersion = 9;
+  }
+
+  if (currentVersion === 9) {
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS mesas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  numero INTEGER NOT NULL UNIQUE,
+  creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+    currentVersion = 10;
+  }
+
+  if (currentVersion === 10) {
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS pedidos_mesa (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mesa_id INTEGER NOT NULL REFERENCES mesas(id) ON DELETE CASCADE,
+  bebida_id INTEGER NOT NULL,
+  bebida_nombre TEXT NOT NULL,
+  bebida_precio REAL NOT NULL,
+  bebida_costo REAL NOT NULL,
+  cantidad INTEGER NOT NULL DEFAULT 1 CHECK (cantidad > 0),
+  entregado INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_pedidos_mesa_mesa ON pedidos_mesa(mesa_id);
+`);
+    currentVersion = 11;
+  }
+
+  if (currentVersion === 11) {
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS trabajadores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL,
+  creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS pagos_trabajador (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trabajador_id INTEGER NOT NULL REFERENCES trabajadores(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('produccion', 'propina')),
+  monto REAL NOT NULL CHECK (monto >= 0),
+  creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_trabajador_trabajador ON pagos_trabajador(trabajador_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_trabajador_fecha ON pagos_trabajador(creado_en);
+`);
+    currentVersion = 12;
+  }
+
+  if (currentVersion === 12) {
+    const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(pedidos_mesa)');
+    const hasCreadoEn = columns.some((c) => c.name === 'creado_en');
+    const hasNotificado = columns.some((c) => c.name === 'notificado');
+    if (!hasCreadoEn) {
+      await db.execAsync('ALTER TABLE pedidos_mesa ADD COLUMN creado_en TEXT;');
+    }
+    if (!hasNotificado) {
+      await db.execAsync('ALTER TABLE pedidos_mesa ADD COLUMN notificado INTEGER NOT NULL DEFAULT 0;');
+    }
+    currentVersion = 13;
+  }
+
+  if (currentVersion === 13) {
+    // Cambiar mesas.numero (INTEGER) a mesas.nombre (TEXT UNIQUE)
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS mesas_nueva (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL UNIQUE,
+  creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT INTO mesas_nueva (id, nombre, creado_en) SELECT id, CAST(numero AS TEXT), creado_en FROM mesas;
+
+DROP TABLE mesas;
+ALTER TABLE mesas_nueva RENAME TO mesas;
+`);
+    currentVersion = 14;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

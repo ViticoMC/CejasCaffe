@@ -8,11 +8,13 @@ import { WebView } from 'react-native-webview';
 import { construirMenu } from '../servidor/menu/datos';
 import { generarPagina } from '../servidor/menu/pagina';
 import { colores, espaciado, radio } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { tipografia } from '../theme/typography';
 
 export function VistaPreviaScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
+  const paddingBottom = useBottomSafe();
   const [pagina, setPagina] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function VistaPreviaScreen() {
         </Pressable>
       </View>
 
-      <View style={estilos.marco}>
+      <View style={[estilos.marco, { marginBottom: paddingBottom }]}>
         {cargando ? (
           <View style={estilos.centro}>
             <ActivityIndicator color={colores.brand.secondary} size="large" />
@@ -125,7 +127,6 @@ const estilos = StyleSheet.create({
   marco: {
     flex: 1,
     marginHorizontal: espaciado.lg,
-    marginBottom: espaciado.lg,
     borderRadius: radio.lg,
     backgroundColor: colores.bg.surface,
     borderWidth: 1,

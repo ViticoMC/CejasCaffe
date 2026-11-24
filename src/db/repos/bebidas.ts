@@ -45,10 +45,11 @@ export async function crearBebida(
   let bebidaId = 0;
   await db.withExclusiveTransactionAsync(async (txn) => {
     const resultado = await txn.runAsync(
-      'INSERT INTO bebidas (nombre, descripcion, porcentaje_ganancia, activo) VALUES (?, ?, ?, ?)',
+      'INSERT INTO bebidas (nombre, descripcion, porcentaje_ganancia, ingredientes_menu, activo) VALUES (?, ?, ?, ?, ?)',
       dato.nombre.trim(),
       dato.descripcion?.trim() || null,
       dato.porcentaje_ganancia,
+      dato.ingredientes_menu?.trim() || null,
       dato.activo === false ? 0 : 1
     );
     bebidaId = resultado.lastInsertRowId;
@@ -74,10 +75,11 @@ export async function actualizarBebida(
 ): Promise<void> {
   await db.withExclusiveTransactionAsync(async (txn) => {
     await txn.runAsync(
-      "UPDATE bebidas SET nombre = ?, descripcion = ?, porcentaje_ganancia = ?, activo = COALESCE(?, activo), actualizado_en = datetime('now') WHERE id = ?",
+      "UPDATE bebidas SET nombre = ?, descripcion = ?, porcentaje_ganancia = ?, ingredientes_menu = ?, activo = COALESCE(?, activo), actualizado_en = datetime('now') WHERE id = ?",
       dato.nombre.trim(),
       dato.descripcion?.trim() || null,
       dato.porcentaje_ganancia,
+      dato.ingredientes_menu?.trim() || null,
       dato.activo == null ? null : dato.activo ? 1 : 0,
       id
     );

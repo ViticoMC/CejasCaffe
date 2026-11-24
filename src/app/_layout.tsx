@@ -6,12 +6,14 @@ import { Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold } from '@expo-g
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SQLiteProvider, type SQLiteDatabase } from 'expo-sqlite';
+import { SQLiteProvider, useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ProveedorRecarga, useRecarga } from '../context/recarga';
 import { DATABASE_NAME, migrateDbIfNeeded } from '../db/database';
 import { reiniciarDbSiSePidio } from '../db/devReset';
+import { inicializarNotificaciones, verificarPedidosVencidos } from '../services/notificaciones';
 import { colores } from '../theme/tokens';
 import { NavBar } from '../ui/NavBar';
 
@@ -46,6 +48,7 @@ function CuerpoApp() {
     <SafeAreaProvider key={clave}>
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={inicializarDb}>
         <StatusBar style="dark" />
+        <NotificacionesBackground />
         <View style={estilos.shell}>
           <Stack
             screenOptions={{
@@ -58,6 +61,26 @@ function CuerpoApp() {
       </SQLiteProvider>
     </SafeAreaProvider>
   );
+}
+
+function NotificacionesBackground() {
+  const db = useSQLiteContext();
+
+  useEffect(() => {
+    inicializarNotificaciones();
+  }, []);
+
+  useEffect(() => {
+    // Verificar pedidos vencidos cada 10 minutos
+    const id = setInterval(() => {
+      verificarPedidosVencidos(db);
+    }, 10 * 60_000);
+    // Ejecutar la primera verificación de inmediato
+    verificarPedidosVencidos(db);
+    return () => clearInterval(id);
+  }, [db]);
+
+  return null;
 }
 
 const estilos = StyleSheet.create({

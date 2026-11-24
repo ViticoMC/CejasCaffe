@@ -14,6 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { listarBebidas } from '../db/repos/bebidas';
 import { listarServicios, obtenerRecetaServicio } from '../db/repos/servicios';
+import {
+  obtenerResumenEstadisticas,
+  obtenerTendencia,
+  obtenerVentasPorProducto,
+} from '../db/repos/estadisticas';
 import { eliminarVenta, listarVentas, registrarVenta } from '../db/repos/ventas';
 import {
   calcularGananciaPorVenta,
@@ -24,12 +29,23 @@ import {
   fechaAVentaISO,
   fechaDePeriodo,
   formatearFechaHora,
+  granularidadDePeriodo,
   rangoDePeriodo,
+  rangoDePeriodoAnterior,
   tituloDePeriodo,
   type TipoPeriodo,
 } from '../domain/fechas';
-import type { Bebida, Servicio, TipoProducto, Venta } from '../domain/tipos';
+import type {
+  Bebida,
+  EstadisticaProducto,
+  PuntoTendencia,
+  ResumenEstadisticas,
+  Servicio,
+  TipoProducto,
+  Venta,
+} from '../domain/tipos';
 import { colores, espaciado, radio, sombra } from '../theme/tokens';
+import { useBottomSafe } from '../hooks/useBottomSafe';
 import { formatearDinero, tipografia } from '../theme/typography';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -39,6 +55,7 @@ import { ChipSelector, type OpcionChip } from '../ui/ChipSelector';
 import { EmptyState } from '../ui/EmptyState';
 import { FechaSelector } from '../ui/FechaSelector';
 import { Modal } from '../ui/Modal';
+import { VentasEstadisticasView } from './VentasEstadisticasView';
 
 type BebidaConResumen = Bebida & { resumen: ResumenReceta };
 type ServicioConResumen = Servicio & { resumen: ResumenReceta };
@@ -70,6 +87,11 @@ const OPCIONES_TIPO: OpcionChip<FiltroTipo>[] = [
   { valor: 'servicio', etiqueta: 'Servicios' },
 ];
 
+const OPCIONES_VISTA: OpcionChip<'lista' | 'estadisticas'>[] = [
+  { valor: 'lista', etiqueta: 'Ventas' },
+  { valor: 'estadisticas', etiqueta: 'Estadísticas' },
+];
+
 const ETIQUETA_TIPO: Record<TipoProducto, string> = {
   bebida: 'Bebida',
   servicio: 'Servicio',
@@ -78,6 +100,7 @@ const ETIQUETA_TIPO: Record<TipoProducto, string> = {
 export function VentasScreen() {
   const db = useSQLiteContext();
   const { height } = useWindowDimensions();
+  const paddingBottom = useBottomSafe();
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [bebidas, setBebidas] = useState<BebidaConResumen[]>([]);
   const [servicios, setServicios] = useState<ServicioConResumen[]>([]);
@@ -95,6 +118,13 @@ export function VentasScreen() {
   const [modalCalendario, setModalCalendario] = useState(false);
   const [fechaSeleccionada, setFechaSeleccionada] = useState<Date>(() => new Date());
   const [calendarioId, setCalendarioId] = useState(0);
+  const [vistaActiva, setVistaActiva] = useState<'lista' | 'estadisticas'>('lista');
+  const [statsProducto, setStatsProducto] = useState<EstadisticaProducto[]>([]);
+  const [statsTendencia, setStatsTendencia] = useState<PuntoTendencia[]>([]);
+  const [statsResumen, setStatsResumen] = useState<ResumenEstadisticas | null>(null);
+  const [statsAnterior, setStatsAnterior] = useState<ResumenEstadisticas | null>(null);
+  const [cargandoStats, setCargandoStats] = useState(false);
+  const [errorStats, setErrorStats] = useState<string | null>(null);
 
   const productos: ProductoConResumen[] = useMemo(
     () => [
@@ -128,6 +158,8 @@ export function VentasScreen() {
         tipoFiltro === 'servicio' && productoFiltro !== 0 ? productoFiltro : undefined,
     };
   }, [periodo, offset, tipoFiltro, productoFiltro]);
+
+  const granularidad = useMemo(() => granularidadDePeriodo(periodo), [periodo]);
 
   const recargar = useCallback(async () => {
     setCargando(true);
@@ -165,21 +197,56 @@ export function VentasScreen() {
     }
   }, [db, filtro]);
 
+  const recargarEstadisticas = useCallback(async () => {
+    setCargandoStats(true);
+    setErrorStats(null);
+    try {
+      const rangoAnterior = rangoDePeriodoAnterior(periodo, offset);
+      const filtroAnterior = rangoAnterior
+        ? { ...filtro, desde: rangoAnterior.desde, hasta: rangoAnterior.hasta }
+        : null;
+
+      const [resumenActual, productos, tendencia, anterior] = await Promise.all([
+        obtenerResumenEstadisticas(db, filtro),
+        obtenerVentasPorProducto(db, filtro),
+        obtenerTendencia(db, filtro, granularidad),
+        filtroAnterior
+          ? obtenerResumenEstadisticas(db, filtroAnterior)
+          : Promise.resolve(null),
+      ]);
+
+      setStatsResumen(resumenActual);
+      setStatsProducto(productos);
+      setStatsTendencia(tendencia);
+      setStatsAnterior(anterior);
+    } catch (e) {
+      setErrorStats(
+        e instanceof Error ? e.message : 'No se pudieron cargar las estadísticas'
+      );
+    } finally {
+      setCargandoStats(false);
+    }
+  }, [db, filtro, periodo, offset, granularidad]);
+
   useEffect(() => {
     recargar();
   }, [recargar]);
 
+  useEffect(() => {
+    if (vistaActiva === 'estadisticas') {
+      recargarEstadisticas();
+    }
+  }, [vistaActiva, recargarEstadisticas]);
+
   const resumen = useMemo(() => {
     const totalVentas = ventas.reduce((s, v) => s + v.cantidad * v.precio_unitario, 0);
     const totalProduccion = ventas.reduce((s, v) => s + v.cantidad * v.costo_unitario, 0);
-    const totalBebidas = ventas
-      .filter((v) => v.servicio_id == null)
-      .reduce((s, v) => s + v.cantidad, 0);
+    const totalUnidades = ventas.reduce((s, v) => s + v.cantidad, 0);
     return {
       totalVentas,
       totalProduccion,
       totalGanancia: totalVentas - totalProduccion,
-      totalBebidas,
+      totalUnidades,
       numeroVentas: ventas.length,
     };
   }, [ventas]);
@@ -195,14 +262,23 @@ export function VentasScreen() {
     if (productoElegido == null) return;
     setGuardando(true);
     try {
+      const ahora = new Date();
+      const esHoy =
+        fechaVenta.getFullYear() === ahora.getFullYear() &&
+        fechaVenta.getMonth() === ahora.getMonth() &&
+        fechaVenta.getDate() === ahora.getDate();
+      const fecha = esHoy ? undefined : fechaAVentaISO(fechaVenta);
       const { faltantes } = await registrarVenta(db, {
         producto: { tipo: productoElegido.tipo, id: productoElegido.id },
         cantidad: cantidadVenta,
-        fecha: fechaAVentaISO(fechaVenta),
+        ...(fecha != null ? { fecha } : {}),
       });
       setModalRegistro(false);
       setProductoElegido(null);
       await recargar();
+      if (vistaActiva === 'estadisticas') {
+        await recargarEstadisticas();
+      }
       if (faltantes.length > 0) {
         const detalle = faltantes
           .map(
@@ -226,6 +302,9 @@ export function VentasScreen() {
     await eliminarVenta(db, eliminando.id);
     setEliminando(null);
     await recargar();
+    if (vistaActiva === 'estadisticas') {
+      await recargarEstadisticas();
+    }
   };
 
   const abrirCalendario = () => {
@@ -317,51 +396,61 @@ export function VentasScreen() {
         </Pressable>
       </View>
 
-      <View style={estilos.zonaResumen}>
-        <Card style={estilos.resumenCard}>
-          <View style={estilos.filaResumen}>
-            <View style={estilos.celdaResumen}>
-              <Text style={tipografia.micro}>Bebidas</Text>
-              <Text style={[estilos.valorResumen, { color: colores.brand.accent }]}>
-                {formatearCantidad(resumen.totalBebidas)}
-              </Text>
-            </View>
-            <View style={estilos.divisorResumen} />
-            <View style={estilos.celdaResumen}>
-              <Text style={tipografia.micro}>Ventas</Text>
-              <Text style={[estilos.valorResumen, { color: colores.brand.primary }]}>
-                {formatearDinero(resumen.totalVentas)}
-              </Text>
-            </View>
-          </View>
-          <View style={estilos.divisorHorizontal} />
-          <View style={estilos.filaResumen}>
-            <View style={estilos.celdaResumen}>
-              <Text style={tipografia.micro}>Producción</Text>
-              <Text style={[estilos.valorResumen, { color: colores.texto.secondary }]}>
-                {formatearDinero(resumen.totalProduccion)}
-              </Text>
-            </View>
-            <View style={estilos.divisorResumen} />
-            <View style={estilos.celdaResumen}>
-              <Text style={tipografia.micro}>Ganancia</Text>
-              <Text
-                style={[
-                  estilos.valorResumen,
-                  {
-                    color:
-                      resumen.totalGanancia >= 0
-                        ? colores.funcional.success
-                        : colores.funcional.error,
-                  },
-                ]}
-              >
-                {formatearDinero(resumen.totalGanancia)}
-              </Text>
-            </View>
-          </View>
-        </Card>
+      <View style={estilos.zonaVista}>
+        <ChipSelector
+          opciones={OPCIONES_VISTA}
+          seleccionado={vistaActiva}
+          onSeleccionar={setVistaActiva}
+        />
       </View>
+
+      {vistaActiva === 'lista' && (
+        <View style={estilos.zonaResumen}>
+          <Card style={estilos.resumenCard}>
+            <View style={estilos.filaResumen}>
+              <View style={estilos.celdaResumen}>
+                <Text style={tipografia.micro}>Unidades</Text>
+                <Text style={[estilos.valorResumen, { color: colores.brand.accent }]}>
+                  {formatearCantidad(resumen.totalUnidades)}
+                </Text>
+              </View>
+              <View style={estilos.divisorResumen} />
+              <View style={estilos.celdaResumen}>
+                <Text style={tipografia.micro}>Ingresos</Text>
+                <Text style={[estilos.valorResumen, { color: colores.brand.primary }]}>
+                  {formatearDinero(resumen.totalVentas)}
+                </Text>
+              </View>
+            </View>
+            <View style={estilos.divisorHorizontal} />
+            <View style={estilos.filaResumen}>
+              <View style={estilos.celdaResumen}>
+                <Text style={tipografia.micro}>Costo</Text>
+                <Text style={[estilos.valorResumen, { color: colores.texto.secondary }]}>
+                  {formatearDinero(resumen.totalProduccion)}
+                </Text>
+              </View>
+              <View style={estilos.divisorResumen} />
+              <View style={estilos.celdaResumen}>
+                <Text style={tipografia.micro}>Ganancia</Text>
+                <Text
+                  style={[
+                    estilos.valorResumen,
+                    {
+                      color:
+                        resumen.totalGanancia >= 0
+                          ? colores.funcional.success
+                          : colores.funcional.error,
+                    },
+                  ]}
+                >
+                  {formatearDinero(resumen.totalGanancia)}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        </View>
+      )}
 
       <View style={estilos.zonaFiltros}>
         <View style={estilos.filaPeriodo}>
@@ -424,33 +513,48 @@ export function VentasScreen() {
         )}
       </View>
 
-      {cargando ? (
-        <View style={estilos.centro}>
-          <ActivityIndicator color={colores.brand.secondary} size="large" />
-        </View>
+      {vistaActiva === 'lista' ? (
+        cargando ? (
+          <View style={estilos.centro}>
+            <ActivityIndicator color={colores.brand.secondary} size="large" />
+          </View>
+        ) : (
+          <FlatList
+            data={ventas}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            contentContainerStyle={[estilos.lista, { paddingBottom }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <EmptyState
+                titulo="Sin ventas aquí"
+                texto={
+                  productos.length === 0
+                    ? 'Crea bebidas o servicios con sus recetas para poder registrar ventas.'
+                    : 'No hay ventas en el periodo o producto seleccionado.'
+                }
+                accion={
+                  productos.length === 0
+                    ? undefined
+                    : { label: 'Registrar venta', onPress: abrirRegistro }
+                }
+              />
+            }
+          />
+        )
       ) : (
-        <FlatList
-          data={ventas}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={estilos.lista}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <EmptyState
-              titulo="Sin ventas aquí"
-              texto={
-                productos.length === 0
-                  ? 'Crea bebidas o servicios con sus recetas para poder registrar ventas.'
-                  : 'No hay ventas en el periodo o producto seleccionado.'
-              }
-              accion={
-                productos.length === 0
-                  ? undefined
-                  : { label: 'Registrar venta', onPress: abrirRegistro }
-              }
-            />
-          }
+        <VentasEstadisticasView
+          resumen={statsResumen}
+          resumenAnterior={statsAnterior}
+          statsProducto={statsProducto}
+          statsTendencia={statsTendencia}
+          granularidad={granularidad}
+          cargando={cargandoStats}
+          error={errorStats}
+          onReintentar={recargarEstadisticas}
+          onRegistrarVenta={abrirRegistro}
+          paddingBottom={paddingBottom}
         />
       )}
 
@@ -685,6 +789,10 @@ const estilos = StyleSheet.create({
     lineHeight: 22,
     fontVariant: ['tabular-nums'],
   },
+  zonaVista: {
+    paddingHorizontal: espaciado['2xl'],
+    paddingBottom: espaciado.sm,
+  },
   zonaFiltros: {
     gap: espaciado.md,
     paddingBottom: espaciado.md,
@@ -725,7 +833,6 @@ const estilos = StyleSheet.create({
   },
   lista: {
     paddingHorizontal: espaciado['2xl'],
-    paddingBottom: 200,
     gap: espaciado.md,
   },
   card: {

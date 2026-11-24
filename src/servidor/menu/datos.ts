@@ -12,7 +12,7 @@ export interface FotoMenu {
 }
 
 export interface IngredienteMenu {
-  id: number;
+  id?: number;
   nombre: string;
 }
 
@@ -37,6 +37,7 @@ interface BebidaFila {
   nombre: string;
   descripcion: string | null;
   precio: number;
+  ingredientes_menu: string | null;
 }
 
 interface FotoFila {
@@ -79,7 +80,7 @@ export async function construirMenu(
   modo: ModoFoto = 'servidor'
 ): Promise<MenuDatos> {
   const bebidas = await db.getAllAsync<BebidaFila>(
-    'SELECT id, nombre, descripcion, precio_venta AS precio FROM bebidas WHERE activo = 1 ORDER BY nombre ASC'
+    'SELECT id, nombre, descripcion, precio_venta AS precio, ingredientes_menu FROM bebidas WHERE activo = 1 ORDER BY nombre ASC'
   );
 
   if (bebidas.length === 0) {
@@ -125,13 +126,25 @@ export async function construirMenu(
       if (src == null) continue;
       fotosMenu.push({ id: fila.id, src, ancho: fila.ancho, alto: fila.alto });
     }
+
+    let ingredientes: IngredienteMenu[];
+    if (bebida.ingredientes_menu && bebida.ingredientes_menu.trim().length > 0) {
+      ingredientes = bebida.ingredientes_menu
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .map((nombre) => ({ nombre }));
+    } else {
+      ingredientes = recetaPorBebida.get(bebida.id) ?? [];
+    }
+
     bebidasMenu.push({
       id: bebida.id,
       nombre: bebida.nombre,
       descripcion: bebida.descripcion,
       precio: bebida.precio,
       fotos: fotosMenu,
-      ingredientes: recetaPorBebida.get(bebida.id) ?? [],
+      ingredientes,
     });
   }
 

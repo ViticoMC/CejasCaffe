@@ -13,14 +13,16 @@ import type {
   Ingrediente,
   Inversion,
   MovimientoInventario,
+  PagoTrabajador,
   Paquete,
   Servicio,
   ServicioMaterial,
+  Trabajador,
   Venta,
 } from '../domain/tipos';
 
 export const ESCHEMA_RESPALDO = 'misventas';
-export const VERSION_RESPALDO = 5;
+export const VERSION_RESPALDO = 7;
 
 export type FilaBebidaRespaldo = Omit<Bebida, 'activo'> & { activo: 0 | 1 };
 export type FilaServicioRespaldo = Omit<Servicio, 'activo'> & { activo: 0 | 1 };
@@ -37,6 +39,8 @@ export interface RespaldoDatos {
   ventas: Venta[];
   inversiones: Inversion[];
   movimientos_inventario: MovimientoInventario[];
+  trabajadores: Trabajador[];
+  pagos_trabajador: PagoTrabajador[];
 }
 
 export interface RespaldoCompleto {
@@ -56,6 +60,8 @@ export interface ResumenRestauracion {
   ventas: number;
   inversiones: number;
   movimientos_inventario: number;
+  trabajadores: number;
+  pagos_trabajador: number;
 }
 
 const TABLAS_RESPALDO: (keyof RespaldoDatos)[] = [
@@ -69,16 +75,20 @@ const TABLAS_RESPALDO: (keyof RespaldoDatos)[] = [
   'ventas',
   'inversiones',
   'movimientos_inventario',
+  'trabajadores',
+  'pagos_trabajador',
 ];
 
 const TABLAS_OPCIONALES: (keyof RespaldoDatos)[] = [
   'paquetes',
   'movimientos_inventario',
   'bebida_fotos',
+  'trabajadores',
+  'pagos_trabajador',
 ];
 
 export async function exportarRespaldo(db: SQLiteDatabase): Promise<string> {
-  const [ingredientes, paquetes, bebidas, bebida_ingredientes, servicios, servicio_materiales, ventas, inversiones, movimientos_inventario, fotosFilas] =
+  const [ingredientes, paquetes, bebidas, bebida_ingredientes, servicios, servicio_materiales, ventas, inversiones, movimientos_inventario, fotosFilas, trabajadores, pagos_trabajador] =
     await Promise.all([
       db.getAllAsync<Ingrediente>('SELECT * FROM ingredientes'),
       db.getAllAsync<Paquete>('SELECT * FROM paquetes'),
@@ -90,6 +100,8 @@ export async function exportarRespaldo(db: SQLiteDatabase): Promise<string> {
       db.getAllAsync<Inversion>('SELECT * FROM inversiones'),
       db.getAllAsync<MovimientoInventario>('SELECT * FROM movimientos_inventario'),
       db.getAllAsync<BebidaFoto>('SELECT * FROM bebida_fotos ORDER BY bebida_id, orden, id'),
+      db.getAllAsync<Trabajador>('SELECT * FROM trabajadores'),
+      db.getAllAsync<PagoTrabajador>('SELECT * FROM pagos_trabajador'),
     ]);
 
   const bebida_fotos: FilaFotoRespaldo[] = [];
@@ -121,6 +133,8 @@ export async function exportarRespaldo(db: SQLiteDatabase): Promise<string> {
       ventas,
       inversiones,
       movimientos_inventario,
+      trabajadores,
+      pagos_trabajador,
     },
   };
 
@@ -178,6 +192,8 @@ export function resumenDeRespaldo(respaldo: RespaldoCompleto): ResumenRestauraci
     ventas: datos.ventas.length,
     inversiones: datos.inversiones.length,
     movimientos_inventario: datos.movimientos_inventario.length,
+    trabajadores: (datos.trabajadores ?? []).length,
+    pagos_trabajador: (datos.pagos_trabajador ?? []).length,
   };
 }
 
@@ -190,6 +206,8 @@ export async function restaurarRespaldo(
 
   await db.withExclusiveTransactionAsync(async (txn) => {
     await txn.execAsync(`
+      DELETE FROM pagos_trabajador;
+      DELETE FROM trabajadores;
       DELETE FROM movimientos_inventario;
       DELETE FROM ventas;
       DELETE FROM bebida_ingredientes;
@@ -362,6 +380,28 @@ export async function restaurarRespaldo(
         fila.venta_id ?? null,
         fila.inversion_id ?? null,
         fila.paquete_id ?? null,
+        fila.creado_en
+      );
+    }
+
+    for (const fila of (datos.trabajadores ?? [])) {
+      await txn.runAsync(
+        `INSERT INTO trabajadores (id, nombre, creado_en)
+         VALUES (?, ?, ?)`,
+        fila.id,
+        fila.nombre,
+        fila.creado_en
+      );
+    }
+
+    for (const fila of (datos.pagos_trabajador ?? [])) {
+      await txn.runAsync(
+        `INSERT INTO pagos_trabajador (id, trabajador_id, tipo, monto, creado_en)
+         VALUES (?, ?, ?, ?, ?)`,
+        fila.id,
+        fila.trabajador_id,
+        fila.tipo,
+        fila.monto,
         fila.creado_en
       );
     }
